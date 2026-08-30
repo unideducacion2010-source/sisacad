@@ -1,0 +1,6 @@
+{
+  "name": "SysAcad",
+  "description": "Sistema para control académico de calificaciones de alumnos almacenado en Google Drive y Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
