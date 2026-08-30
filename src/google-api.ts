@@ -31,13 +31,13 @@ export async function createDriveFolder(token: string, folderName: string, paren
   if (!response.ok) {
     const err = await response.text();
     console.error('Error al crear la carpeta en Drive:', err);
-    throw new Error('Error al crear la carpeta en Drive');
+    throw new Error('Error al crear la carpeta en Drive: ' + err);
   }
   return response.json();
 }
 
 export async function searchDriveFiles(token: string, query: string) {
-  const url = `${DRIVE_API_URL}?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,parents,webViewLink)&pageSize=10`;
+  const url = `${DRIVE_API_URL}?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,parents,webViewLink)&pageSize=20`;
   const response = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${token}`
@@ -72,6 +72,7 @@ export async function createFullMasterSpreadsheet(token: string, title: string) 
         { properties: { title: 'Control_Escolar' } },
         { properties: { title: 'Kardex' } },
         { properties: { title: 'Usuarios_Sistema' } },
+        { properties: { title: 'Avisos_y_Tareas' } },
       ],
     }),
   });
@@ -79,7 +80,7 @@ export async function createFullMasterSpreadsheet(token: string, title: string) 
   if (!response.ok) {
     const err = await response.text();
     console.error('Error al crear la hoja de cálculo:', err);
-    throw new Error('Error al crear la hoja de cálculo');
+    throw new Error('Error al crear la base de datos en Google Sheets: ' + err);
   }
   return response.json();
 }
@@ -141,6 +142,10 @@ export async function writeAllMasterHeaders(token: string, spreadsheetId: string
     {
       range: 'Usuarios_Sistema!A1:H1',
       values: [['ID Usuario', 'Usuario (Login)', 'Contraseña', 'Nombre Completo', 'Correo Electrónico', 'Rol / Función', 'Estado', 'Fecha Registro']]
+    },
+    {
+      range: 'Avisos_y_Tareas!A1:G1',
+      values: [['ID Aviso', 'Tipo', 'Emisor', 'Destinatario', 'Mensaje / Tarea', 'Fecha Programada', 'Fecha y Hora de Publicación']]
     }
   ];
 
@@ -159,7 +164,7 @@ export async function writeAllMasterHeaders(token: string, spreadsheetId: string
   if (!response.ok) {
     const err = await response.text();
     console.error('Error al escribir los encabezados:', err);
-    throw new Error('Error al escribir los encabezados en la hoja');
+    throw new Error('Error al escribir los encabezados en la hoja de Google Sheets');
   }
   return response.json();
 }
@@ -172,64 +177,65 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     calificacionesList = [],
     controlRecords = [],
     kardexList = [],
-    systemUsers = []
+    systemUsers = [],
+    avisosList = []
   } = appData;
 
   const alumnosRows = studentsList.map((s: any) => [
     s.id || '',
-    s.matricula || '',
+    s.matricula || `MAT-${s.id?.slice(-4) || '001'}`,
     s.nombres || s.nombre || '',
     s.apellidos || '',
-    s.grado || s.grupo || '',
-    s.carrera || s.nivel || '',
+    s.grado || s.grupo || '1er Grado',
+    s.carrera || s.nivel || 'General',
     s.email || '',
     s.estatus || 'Activo',
-    s.fechaRegistro || new Date().toISOString().split('T')[0]
+    s.fechaRegistro || s.fechaInscripcion || new Date().toISOString().split('T')[0]
   ]);
 
   const maestrosRows = teachersList.map((m: any) => [
     m.id || '',
-    m.nombre || '',
-    m.especialidad || '',
+    m.name || m.nombre || '',
+    m.especialidad || m.role || 'Docente',
     m.email || '',
     m.telefono || '',
-    m.estatus || 'Activo'
+    m.status || m.estatus || 'Activo'
   ]);
 
   const materiasRows = materiasList.map((mat: any) => [
     mat.id || '',
-    mat.clave || '',
+    mat.clave || `MAT-${mat.id?.slice(-3) || '101'}`,
     mat.nombre || '',
-    mat.grado || mat.semestre || '',
-    mat.creditos || '',
-    mat.maestro || ''
+    mat.grado || mat.semestre || '1er Grado',
+    mat.creditos !== undefined ? mat.creditos : 6,
+    mat.profesor || mat.maestro || 'Por Asignar'
   ]);
 
   const calificacionesRows = calificacionesList.map((c: any) => [
     c.id || '',
     c.alumno || '',
     c.materia || '',
-    c.parcial || '',
-    c.calificacion !== undefined ? c.calificacion : '',
-    (c.calificacion >= 6 ? 'Aprobado' : 'Reprobado'),
+    c.parcial || 'Primer Parcial',
+    c.calificacion !== undefined ? c.calificacion : 0,
+    (Number(c.calificacion) >= 6 ? 'Aprobado' : 'Reprobado'),
     c.fecha || new Date().toISOString().split('T')[0]
   ]);
 
   const controlRows = controlRecords.map((cr: any) => [
     cr.id || '',
-    cr.cicloEscolar || '',
-    cr.periodo || '',
-    cr.turno || '',
-    cr.inscritos || '',
+    cr.cicloEscolar || '2026-1',
+    cr.periodo || 'Enero - Junio 2026',
+    cr.turno || 'Matutino',
+    cr.inscritos !== undefined ? cr.inscritos : studentsList.length,
     cr.estatus || 'Activo'
   ]);
 
   const kardexRows = kardexList.map((k: any) => [
     k.id || '',
     k.alumno || '',
-    k.promedioGeneral || '',
-    k.materiasCursadas || '',
-    k.creditosAcumulados || '',
+    k.promedioGeneral || '9.0',
+    k.materiasCursadas || materiasList.length,
+    k.creditosAcumulados || materiasList.reduce((acc: number, m: any) => acc + (Number(m.creditos) || 0), 0),
     k.estatusAcademico || 'Regular'
   ]);
 
@@ -244,15 +250,26 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     u.fechaRegistro || u.lastAccess || new Date().toISOString().split('T')[0]
   ]);
 
+  const avisosRows = avisosList.map((a: any) => [
+    a.id || '',
+    a.type === 'tarea' ? 'Tarea Programada' : a.type === 'publico' ? 'Aviso Público' : 'Aviso Personal',
+    a.senderName || 'Sistema',
+    a.targetName || (a.type === 'publico' ? 'Todos' : 'General'),
+    a.message || '',
+    a.date || 'N/A',
+    a.timestamp || new Date().toLocaleString()
+  ]);
+
   // First clear old data A2:Z1000 in each sheet
   const clearRanges = [
-    'Alumnos!A2:I100',
-    'Maestros!A2:F100',
-    'Materias!A2:F100',
-    'Calificaciones!A2:G100',
-    'Control_Escolar!A2:F100',
-    'Kardex!A2:F100',
-    'Usuarios_Sistema!A2:H100'
+    'Alumnos!A2:I200',
+    'Maestros!A2:F200',
+    'Materias!A2:F200',
+    'Calificaciones!A2:G200',
+    'Control_Escolar!A2:F200',
+    'Kardex!A2:F200',
+    'Usuarios_Sistema!A2:H200',
+    'Avisos_y_Tareas!A2:G200'
   ];
 
   await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values:batchClear`, {
@@ -271,7 +288,8 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     { range: 'Calificaciones!A2', values: calificacionesRows.length ? calificacionesRows : [['', '', '', '', '', '', '']] },
     { range: 'Control_Escolar!A2', values: controlRows.length ? controlRows : [['', '', '', '', '', '']] },
     { range: 'Kardex!A2', values: kardexRows.length ? kardexRows : [['', '', '', '', '', '']] },
-    { range: 'Usuarios_Sistema!A2', values: usuariosRows.length ? usuariosRows : [['', '', '', '', '', '', '', '']] }
+    { range: 'Usuarios_Sistema!A2', values: usuariosRows.length ? usuariosRows : [['', '', '', '', '', '', '', '']] },
+    { range: 'Avisos_y_Tareas!A2', values: avisosRows.length ? avisosRows : [['', '', '', '', '', '', '']] }
   ];
 
   const response = await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values:batchUpdate`, {
@@ -319,7 +337,9 @@ export async function setupSysAcadWorkspace(token: string, appData: any): Promis
     '04_Calificaciones_y_Actas',
     '05_Control_Escolar',
     '06_Kardex_y_Reportes',
-    '07_Usuarios_Sistema'
+    '07_Usuarios_Sistema',
+    '08_Avisos_y_Tareas_Programadas',
+    '09_Respaldos_del_Sistema'
   ];
 
   const subfoldersList: { name: string; id: string; url: string }[] = [];
@@ -353,7 +373,7 @@ export async function setupSysAcadWorkspace(token: string, appData: any): Promis
     await moveFileToFolder(token, spreadsheetId, rootFolderId);
   }
 
-  // 4. Write Headers for all 7 sheets
+  // 4. Write Headers for all 8 sheets
   await writeAllMasterHeaders(token, spreadsheetId);
 
   // 5. Sync all current data from app state into the sheets
@@ -368,9 +388,105 @@ export async function setupSysAcadWorkspace(token: string, appData: any): Promis
   };
 }
 
+export async function loadFullDataFromSheets(token: string, spreadsheetId: string): Promise<any | null> {
+  try {
+    const ranges = [
+      'Alumnos!A2:I200',
+      'Maestros!A2:F200',
+      'Materias!A2:F200',
+      'Calificaciones!A2:G200',
+      'Usuarios_Sistema!A2:H200',
+      'Avisos_y_Tareas!A2:G200'
+    ];
+
+    const url = `${SHEETS_API_URL}/${spreadsheetId}/values:batchGet?ranges=${ranges.map(r => encodeURIComponent(r)).join('&ranges=')}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    const valueRanges = json.valueRanges || [];
+
+    const alumnosRows = valueRanges[0]?.values || [];
+    const materiasRows = valueRanges[2]?.values || [];
+    const calificacionesRows = valueRanges[3]?.values || [];
+    const usuariosRows = valueRanges[4]?.values || [];
+    const avisosRows = valueRanges[5]?.values || [];
+
+    const loadedAlumnos = alumnosRows
+      .filter((r: any[]) => r && r[2])
+      .map((r: any[], idx: number) => ({
+        id: r[0] || `a-${Date.now()}-${idx}`,
+        nombres: r[2] || '',
+        apellidos: r[3] || '',
+        grado: r[4] || '1er Grado',
+        email: r[6] || '',
+        fechaInscripcion: r[8] || new Date().toISOString().split('T')[0]
+      }));
+
+    const loadedMaterias = materiasRows
+      .filter((r: any[]) => r && r[2])
+      .map((r: any[], idx: number) => ({
+        id: r[0] || `m-${Date.now()}-${idx}`,
+        nombre: r[2] || '',
+        profesor: r[5] || '',
+        creditos: parseInt(r[4], 10) || 6
+      }));
+
+    const loadedCalificaciones = calificacionesRows
+      .filter((r: any[]) => r && r[1] && r[2])
+      .map((r: any[], idx: number) => ({
+        id: r[0] || `c-${Date.now()}-${idx}`,
+        alumno: r[1] || '',
+        materia: r[2] || '',
+        parcial: r[3] || 'Primer Parcial',
+        calificacion: parseFloat(r[4]) || 0,
+        fecha: r[6] || new Date().toISOString().split('T')[0]
+      }));
+
+    const loadedUsers = usuariosRows
+      .filter((r: any[]) => r && (r[1] || r[3]))
+      .map((r: any[], idx: number) => ({
+        id: r[0] || `${Date.now()}-${idx}`,
+        username: r[1] || `user_${idx + 1}`,
+        password: r[2] || '123456',
+        name: r[3] || r[1] || 'Usuario',
+        email: r[4] || '',
+        role: r[5] || 'Control Escolar',
+        status: r[6] || 'Activo',
+        lastAccess: r[7] || 'Reciente'
+      }));
+
+    const loadedAvisos = avisosRows
+      .filter((r: any[]) => r && r[4])
+      .map((r: any[], idx: number) => ({
+        id: r[0] || `av-${Date.now()}-${idx}`,
+        type: r[1] === 'Tarea Programada' ? 'tarea' : r[1] === 'Aviso Público' ? 'publico' : 'personal',
+        senderId: 'sistema',
+        senderName: r[2] || 'Sistema',
+        targetName: r[3] || '',
+        message: r[4] || '',
+        date: r[5] !== 'N/A' ? r[5] : undefined,
+        timestamp: r[6] || new Date().toLocaleString()
+      }));
+
+    return {
+      alumnos: loadedAlumnos,
+      materias: loadedMaterias,
+      calificaciones: loadedCalificaciones,
+      users: loadedUsers,
+      avisos: loadedAvisos
+    };
+  } catch (e) {
+    console.warn('Could not load all tables from sheets:', e);
+    return null;
+  }
+}
+
 export async function fetchUsersFromSheets(token: string, spreadsheetId: string): Promise<any[]> {
   try {
-    const url = `${SHEETS_API_URL}/${spreadsheetId}/values/Usuarios_Sistema!A2:H100`;
+    const url = `${SHEETS_API_URL}/${spreadsheetId}/values/Usuarios_Sistema!A2:H200`;
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -413,7 +529,7 @@ export async function syncUsersToSheet(token: string, spreadsheetId: string, use
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ ranges: ['Usuarios_Sistema!A2:H100'] })
+    body: JSON.stringify({ ranges: ['Usuarios_Sistema!A2:H200'] })
   }).catch(() => {});
 
   const response = await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values/Usuarios_Sistema!A2?valueInputOption=USER_ENTERED`, {
@@ -430,4 +546,5 @@ export async function syncUsersToSheet(token: string, spreadsheetId: string, use
   }
   return response.json();
 }
+
 

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, GripVertical, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar } from 'lucide-react';
+import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, GripVertical, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets } from './google-api';
+import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId } from './auth';
 import { playClickSound, playNavigateSound, playLoginSuccessSound, playLogoutSound, playSuccessSound, playErrorSound, playDeleteSound, isSoundMuted, toggleSoundMute } from './soundEffects';
+import { StudentEnrollmentModal, StudentFormData } from './components/StudentEnrollmentModal';
 import { User } from 'firebase/auth';
 
 export interface AppUser {
@@ -93,7 +94,7 @@ export default function App() {
     return normalized;
   });
 
-  // Calificaciones State & Handlers
+  // Interfaces
   interface CalificacionItem {
     id: string;
     alumno: string;
@@ -103,7 +104,305 @@ export default function App() {
     fecha: string;
   }
 
-  const [calificacionesList, setCalificacionesList] = useState<CalificacionItem[]>([]);
+  interface AlumnoItem {
+    id: string;
+    matricula?: string;
+    clave?: string;
+    nombres: string;
+    apellidos: string;
+    apellidoPaterno?: string;
+    apellidoMaterno?: string;
+    genero?: string;
+    fechaNacimiento?: string;
+    lugarNacimiento?: string;
+    nacionalidad?: string;
+    curp?: string;
+    calleNumero?: string;
+    colonia?: string;
+    codigoPostal?: string;
+    entreCalles?: string;
+    municipio?: string;
+    estado?: string;
+    nivel?: string;
+    grado: string;
+    grupo?: string;
+    turno?: string;
+    email: string;
+    celular?: string;
+    telefonoCasa?: string;
+    nombrePadreTutor?: string;
+    nombreMadre?: string;
+    parentescoTutor?: string;
+    ocupacionTutor?: string;
+    telefonoEmergencia?: string;
+    emailTutor?: string;
+    escuelaProcedencia?: string;
+    promedioAnterior?: string;
+    razonSocial?: string;
+    rfc?: string;
+    regimenFiscal?: string;
+    usoCfdi?: string;
+    emailFacturacion?: string;
+    cuotaInscripcion?: string;
+    colegiaturaMensual?: string;
+    porcentajeBeca?: string;
+    diaLimitePago?: string;
+    docActaNacimiento?: boolean;
+    docCurp?: boolean;
+    docCertificadoMedico?: boolean;
+    docCartaConducta?: boolean;
+    docComprobanteDomicilio?: boolean;
+    docFotos?: boolean;
+    docComprobantePago?: boolean;
+    fotoUrl?: string;
+    estatus?: string;
+    fechaInscripcion: string;
+  }
+
+  interface MateriaItem {
+    id: string;
+    nombre: string;
+    profesor: string;
+    creditos: number;
+  }
+
+  interface AvisoItem {
+    id: string;
+    type: 'personal' | 'publico' | 'tarea';
+    senderId: string;
+    senderName: string;
+    targetId?: string;
+    targetName?: string;
+    message: string;
+    date?: string;
+    timestamp: string;
+  }
+
+  // Initial Default Datasets
+  const initialDefaultAlumnos: AlumnoItem[] = [
+    { 
+      id: '1', 
+      matricula: '439',
+      clave: 'ALU-439',
+      nombres: 'Juan Carlos', 
+      apellidos: 'Pérez Hernández', 
+      apellidoPaterno: 'Pérez',
+      apellidoMaterno: 'Hernández',
+      genero: 'Masculino',
+      fechaNacimiento: '2018-05-14',
+      lugarNacimiento: 'Morelia, Michoacán',
+      nacionalidad: 'Mexicana',
+      curp: 'PEHJ180514HMNRN02',
+      calleNumero: 'Av. Camelinas #1450',
+      colonia: 'Bosques de las Lomas',
+      codigoPostal: '58000',
+      entreCalles: 'Pino y Roble',
+      municipio: 'Morelia',
+      estado: 'Michoacán',
+      nivel: 'Primaria',
+      grado: '1er Grado', 
+      grupo: 'Grupo A',
+      turno: 'Matutino',
+      email: 'juan.perez@sysacad.edu.mx', 
+      celular: '443 123 4567',
+      telefonoCasa: '443 312 0000',
+      nombrePadreTutor: 'Roberto Pérez Flores',
+      nombreMadre: 'Elena Hernández',
+      parentescoTutor: 'Padre',
+      ocupacionTutor: 'Ingeniero Civil',
+      telefonoEmergencia: '443 987 6543',
+      emailTutor: 'rperez@gmail.com',
+      escuelaProcedencia: 'Colegio Montessori Morelia',
+      promedioAnterior: '9.5',
+      razonSocial: 'Roberto Pérez Flores',
+      rfc: 'PEFR800101XYZ',
+      regimenFiscal: '605 - Sueldos y Salarios',
+      usoCfdi: 'D10 - Pagos por servicios educativos (colegiaturas)',
+      emailFacturacion: 'facturacion.perez@gmail.com',
+      cuotaInscripcion: '3500',
+      colegiaturaMensual: '4200',
+      porcentajeBeca: '0',
+      diaLimitePago: '10',
+      docActaNacimiento: true,
+      docCurp: true,
+      docCertificadoMedico: true,
+      docCartaConducta: true,
+      docComprobanteDomicilio: true,
+      docFotos: true,
+      docComprobantePago: true,
+      estatus: 'Activo',
+      fechaInscripcion: '2026-08-15' 
+    },
+    { 
+      id: '2', 
+      matricula: '440',
+      clave: 'ALU-440',
+      nombres: 'María Elena', 
+      apellidos: 'Gómez Flores', 
+      apellidoPaterno: 'Gómez',
+      apellidoMaterno: 'Flores',
+      genero: 'Femenino',
+      fechaNacimiento: '2017-09-22',
+      lugarNacimiento: 'Morelia, Michoacán',
+      nacionalidad: 'Mexicana',
+      curp: 'GOFM170922MMNLR05',
+      calleNumero: 'Calle Ventura Puente #320',
+      colonia: 'Centro Histórico',
+      codigoPostal: '58010',
+      entreCalles: 'Madero y Morelos',
+      municipio: 'Morelia',
+      estado: 'Michoacán',
+      nivel: 'Primaria',
+      grado: '2do Grado', 
+      grupo: 'Grupo B',
+      turno: 'Matutino',
+      email: 'maria.gomez@sysacad.edu.mx', 
+      celular: '443 234 5678',
+      telefonoCasa: '443 313 1122',
+      nombrePadreTutor: 'Ignacio Gómez Ortiz',
+      nombreMadre: 'Rosa Flores',
+      parentescoTutor: 'Padre',
+      telefonoEmergencia: '443 765 4321',
+      estatus: 'Activo',
+      fechaInscripcion: '2026-08-16' 
+    },
+    { 
+      id: '3', 
+      matricula: '441',
+      clave: 'ALU-441',
+      nombres: 'Carlos Alberto', 
+      apellidos: 'Ruiz Sánchez', 
+      apellidoPaterno: 'Ruiz',
+      apellidoMaterno: 'Sánchez',
+      genero: 'Masculino',
+      fechaNacimiento: '2018-02-10',
+      lugarNacimiento: 'Uruapan, Michoacán',
+      nacionalidad: 'Mexicana',
+      curp: 'RUSC180210HMNZR09',
+      calleNumero: 'Paseo de la Reforma #89',
+      colonia: 'Tres Marías',
+      codigoPostal: '58254',
+      entreCalles: 'Paseo del Valle',
+      municipio: 'Morelia',
+      estado: 'Michoacán',
+      nivel: 'Primaria',
+      grado: '1er Grado', 
+      grupo: 'Grupo A',
+      turno: 'Matutino',
+      email: 'carlos.ruiz@sysacad.edu.mx', 
+      celular: '443 345 6789',
+      telefonoCasa: '443 324 5566',
+      nombrePadreTutor: 'Carlos Ruiz Morales',
+      nombreMadre: 'Ana Sánchez',
+      parentescoTutor: 'Padre',
+      telefonoEmergencia: '443 654 3210',
+      estatus: 'Activo',
+      fechaInscripcion: '2026-08-18' 
+    },
+    { 
+      id: '4', 
+      matricula: '442',
+      clave: 'ALU-442',
+      nombres: 'Ana Sofía', 
+      apellidos: 'Torres Morales', 
+      apellidoPaterno: 'Torres',
+      apellidoMaterno: 'Morales',
+      genero: 'Femenino',
+      fechaNacimiento: '2016-11-05',
+      lugarNacimiento: 'Morelia, Michoacán',
+      nacionalidad: 'Mexicana',
+      curp: 'TOMA161105MMNRL03',
+      calleNumero: 'Blvd. García de León #650',
+      colonia: 'Chapultepec Sur',
+      codigoPostal: '58260',
+      entreCalles: 'Artilleros del 47',
+      municipio: 'Morelia',
+      estado: 'Michoacán',
+      nivel: 'Primaria',
+      grado: '3er Grado', 
+      grupo: 'Grupo A',
+      turno: 'Matutino',
+      email: 'ana.torres@sysacad.edu.mx', 
+      celular: '443 456 7890',
+      telefonoCasa: '443 315 7788',
+      nombrePadreTutor: 'Eduardo Torres Díaz',
+      nombreMadre: 'Patricia Morales',
+      parentescoTutor: 'Padre',
+      telefonoEmergencia: '443 543 2109',
+      estatus: 'Activo',
+      fechaInscripcion: '2026-08-20' 
+    },
+    { 
+      id: '5', 
+      matricula: '443',
+      clave: 'ALU-443',
+      nombres: 'Luis Fernando', 
+      apellidos: 'Ramírez Castro', 
+      apellidoPaterno: 'Ramírez',
+      apellidoMaterno: 'Castro',
+      genero: 'Masculino',
+      fechaNacimiento: '2017-04-18',
+      lugarNacimiento: 'Pátzcuaro, Michoacán',
+      nacionalidad: 'Mexicana',
+      curp: 'RACL170418HMNTZ01',
+      calleNumero: 'Av. Acueducto #1120',
+      colonia: 'Villas del Pedregal',
+      codigoPostal: '58341',
+      entreCalles: 'Av. Las Aves',
+      municipio: 'Morelia',
+      estado: 'Michoacán',
+      nivel: 'Primaria',
+      grado: '2do Grado', 
+      grupo: 'Grupo B',
+      turno: 'Matutino',
+      email: 'luis.ramirez@sysacad.edu.mx', 
+      celular: '443 567 8901',
+      telefonoCasa: '443 316 9900',
+      nombrePadreTutor: 'Fernando Ramírez Silva',
+      nombreMadre: 'Claudia Castro',
+      parentescoTutor: 'Padre',
+      telefonoEmergencia: '443 432 1098',
+      estatus: 'Activo',
+      fechaInscripcion: '2026-08-22' 
+    }
+  ];
+
+  const initialDefaultMaterias: MateriaItem[] = [
+    { id: '1', nombre: 'Matemáticas I', profesor: 'Prof. Carlos Mendoza', creditos: 8 },
+    { id: '2', nombre: 'Lengua Española y Literatura', profesor: 'Profra. Rosa Elena Silva', creditos: 6 },
+    { id: '3', nombre: 'Historia de México', profesor: 'Prof. Fernando Morales', creditos: 6 },
+    { id: '4', nombre: 'Biología y Ciencias Naturales', profesor: 'Profra. Carmen Ortiz', creditos: 6 },
+    { id: '5', nombre: 'Física General', profesor: 'Prof. Roberto Vargas', creditos: 8 },
+    { id: '6', nombre: 'Química Orgánica', profesor: 'Profra. Marcela Romero', creditos: 8 },
+    { id: '7', nombre: 'Inglés Técnico', profesor: 'Profra. Diana Jiménez', creditos: 4 },
+    { id: '8', nombre: 'Tecnologías de la Información', profesor: 'Prof. Alejandro Ríos', creditos: 6 }
+  ];
+
+  const initialDefaultCalificaciones: CalificacionItem[] = [
+    { id: '1', alumno: 'Juan Carlos Pérez Hernández', materia: 'Matemáticas I', parcial: 'Primer Parcial', calificacion: 9.5, fecha: '2026-08-25' },
+    { id: '2', alumno: 'Juan Carlos Pérez Hernández', materia: 'Lengua Española y Literatura', parcial: 'Primer Parcial', calificacion: 9.0, fecha: '2026-08-25' },
+    { id: '3', alumno: 'María Elena Gómez Flores', materia: 'Matemáticas I', parcial: 'Primer Parcial', calificacion: 10.0, fecha: '2026-08-25' },
+    { id: '4', alumno: 'Carlos Alberto Ruiz Sánchez', materia: 'Historia de México', parcial: 'Primer Parcial', calificacion: 8.5, fecha: '2026-08-25' },
+    { id: '5', alumno: 'Ana Sofía Torres Morales', materia: 'Biología y Ciencias Naturales', parcial: 'Primer Parcial', calificacion: 9.8, fecha: '2026-08-25' }
+  ];
+
+  const initialDefaultAvisos: AvisoItem[] = [
+    { id: '1', type: 'publico', senderId: '1', senderName: 'Administrador Principal', message: 'Bienvenido al ciclo escolar 2026. La plataforma SysAcad se encuentra conectada con Google Drive y Google Sheets.', timestamp: 'Hoy, 09:00 AM' },
+    { id: '2', type: 'tarea', senderId: '1', senderName: 'Control Escolar', message: 'Cierre y entrega de actas de calificaciones del primer parcial.', date: '2026-09-30', timestamp: 'Ayer, 02:30 PM' }
+  ];
+
+  // Calificaciones State
+  const [calificacionesList, setCalificacionesList] = useState<CalificacionItem[]>(() => {
+    const saved = localStorage.getItem('sysacad_calificaciones_list');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    localStorage.setItem('sysacad_calificaciones_list', JSON.stringify(initialDefaultCalificaciones));
+    return initialDefaultCalificaciones;
+  });
   const [califSearchQuery, setCalifSearchQuery] = useState('');
   const [isCalifModalOpen, setIsCalifModalOpen] = useState(false);
   const [editingCalif, setEditingCalif] = useState<CalificacionItem | null>(null);
@@ -112,10 +411,15 @@ export default function App() {
   const [formCalifParcial, setFormCalifParcial] = useState('Primer Parcial');
   const [formCalifVal, setFormCalifVal] = useState('9.0');
 
+  const updateCalificaciones = (newList: CalificacionItem[]) => {
+    setCalificacionesList(newList);
+    localStorage.setItem('sysacad_calificaciones_list', JSON.stringify(newList));
+  };
+
   const handleOpenCreateCalif = () => {
     setEditingCalif(null);
-    setFormCalifAlumno('');
-    setFormCalifMateria('');
+    setFormCalifAlumno(alumnosList[0] ? `${alumnosList[0].nombres} ${alumnosList[0].apellidos}` : '');
+    setFormCalifMateria(materiasList[0] ? materiasList[0].nombre : '');
     setFormCalifParcial('Primer Parcial');
     setFormCalifVal('9.0');
     setIsCalifModalOpen(true);
@@ -136,7 +440,7 @@ export default function App() {
 
     const numVal = parseFloat(formCalifVal) || 0;
     if (editingCalif) {
-      setCalificacionesList(calificacionesList.map(c => c.id === editingCalif.id ? {
+      updateCalificaciones(calificacionesList.map(c => c.id === editingCalif.id ? {
         ...c,
         alumno: formCalifAlumno,
         materia: formCalifMateria,
@@ -152,27 +456,35 @@ export default function App() {
         calificacion: numVal,
         fecha: new Date().toISOString().split('T')[0]
       };
-      setCalificacionesList([newItem, ...calificacionesList]);
+      updateCalificaciones([newItem, ...calificacionesList]);
     }
     setIsCalifModalOpen(false);
   };
 
   const handleDeleteCalif = (id: string) => {
     if (confirm('¿Estás seguro de eliminar este registro de calificación?')) {
-      setCalificacionesList(calificacionesList.filter(c => c.id !== id));
+      updateCalificaciones(calificacionesList.filter(c => c.id !== id));
     }
   };
 
-  // Alumnos State & Handlers
-  interface AlumnoItem {
-    id: string;
-    nombres: string;
-    apellidos: string;
-    grado: string;
-    email: string;
-    fechaInscripcion: string;
-  }
-  const [alumnosList, setAlumnosList] = useState<AlumnoItem[]>([]);
+  // Alumnos State
+  const [alumnosList, setAlumnosList] = useState<AlumnoItem[]>(() => {
+    const saved = localStorage.getItem('sysacad_alumnos_list');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    localStorage.setItem('sysacad_alumnos_list', JSON.stringify(initialDefaultAlumnos));
+    return initialDefaultAlumnos;
+  });
+
+  const updateAlumnos = (newList: AlumnoItem[]) => {
+    setAlumnosList(newList);
+    localStorage.setItem('sysacad_alumnos_list', JSON.stringify(newList));
+  };
+
   const [selectedAlumnoName, setSelectedAlumnoName] = useState('');
   const [selectedKardexTab, setSelectedKardexTab] = useState<'parcial' | 'final' | null>(null);
   const [kardexGrado, setKardexGrado] = useState('');
@@ -180,68 +492,116 @@ export default function App() {
   const [kardexMaestro, setKardexMaestro] = useState('');
   const [alumnoSearchQuery, setAlumnoSearchQuery] = useState('');
   const [isAlumnoModalOpen, setIsAlumnoModalOpen] = useState(false);
-  const [editingAlumno, setEditingAlumno] = useState<AlumnoItem | null>(null);
-  const [formNombres, setFormNombres] = useState('');
-  const [formApellidos, setFormApellidos] = useState('');
-  const [formGrado, setFormGrado] = useState('1er Grado');
-  const [formEmail, setFormEmail] = useState('');
+  const [editingAlumnoData, setEditingAlumnoData] = useState<StudentFormData | null>(null);
 
   const handleOpenCreateAlumno = () => {
-    setEditingAlumno(null);
-    setFormNombres('');
-    setFormApellidos('');
-    setFormGrado('1er Grado');
-    setFormEmail('');
+    setEditingAlumnoData(null);
     setIsAlumnoModalOpen(true);
   };
 
   const handleOpenEditAlumno = (item: AlumnoItem) => {
-    setEditingAlumno(item);
-    setFormNombres(item.nombres);
-    setFormApellidos(item.apellidos);
-    setFormGrado(item.grado);
-    setFormEmail(item.email);
+    const formData: StudentFormData = {
+      id: item.id,
+      matricula: item.matricula || item.id,
+      clave: item.clave || `ALU-${item.matricula || item.id}`,
+      nombres: item.nombres,
+      apellidoPaterno: item.apellidoPaterno || item.apellidos.split(' ')[0] || '',
+      apellidoMaterno: item.apellidoMaterno || item.apellidos.split(' ').slice(1).join(' ') || '',
+      genero: item.genero || 'Masculino',
+      fechaNacimiento: item.fechaNacimiento || '2018-05-14',
+      lugarNacimiento: item.lugarNacimiento || 'Morelia, Michoacán',
+      nacionalidad: item.nacionalidad || 'Mexicana',
+      curp: item.curp || '',
+      calleNumero: item.calleNumero || '',
+      colonia: item.colonia || '',
+      codigoPostal: item.codigoPostal || '',
+      entreCalles: item.entreCalles || '',
+      municipio: item.municipio || 'Morelia',
+      estado: item.estado || 'Michoacán',
+      email: item.email,
+      celular: item.celular || '',
+      telefonoCasa: item.telefonoCasa || '',
+      nombrePadreTutor: item.nombrePadreTutor || '',
+      nombreMadre: item.nombreMadre || '',
+      parentescoTutor: item.parentescoTutor || 'Padre',
+      ocupacionTutor: item.ocupacionTutor || '',
+      telefonoEmergencia: item.telefonoEmergencia || '',
+      emailTutor: item.emailTutor || '',
+      nivel: item.nivel || 'Primaria',
+      grado: item.grado,
+      grupo: item.grupo || 'Grupo A',
+      turno: item.turno || 'Matutino',
+      escuelaProcedencia: item.escuelaProcedencia || '',
+      promedioAnterior: item.promedioAnterior || '9.0',
+      razonSocial: item.razonSocial || '',
+      rfc: item.rfc || '',
+      regimenFiscal: item.regimenFiscal || '605 - Sueldos y Salarios',
+      usoCfdi: item.usoCfdi || 'D10 - Pagos por servicios educativos (colegiaturas)',
+      emailFacturacion: item.emailFacturacion || '',
+      cuotaInscripcion: item.cuotaInscripcion || '3500',
+      colegiaturaMensual: item.colegiaturaMensual || '4200',
+      porcentajeBeca: item.porcentajeBeca || '0',
+      diaLimitePago: item.diaLimitePago || '10',
+      docActaNacimiento: item.docActaNacimiento ?? true,
+      docCurp: item.docCurp ?? true,
+      docCertificadoMedico: item.docCertificadoMedico ?? false,
+      docCartaConducta: item.docCartaConducta ?? false,
+      docComprobanteDomicilio: item.docComprobanteDomicilio ?? true,
+      docFotos: item.docFotos ?? false,
+      docComprobantePago: item.docComprobantePago ?? true,
+      fotoUrl: item.fotoUrl || '',
+      estatus: item.estatus || 'Activo',
+      fechaInscripcion: item.fechaInscripcion || new Date().toISOString().split('T')[0]
+    };
+    setEditingAlumnoData(formData);
     setIsAlumnoModalOpen(true);
   };
 
-  const handleSaveAlumno = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formNombres.trim() || !formApellidos.trim()) return;
-
-    if (editingAlumno) {
-      setAlumnosList(alumnosList.map(a => a.id === editingAlumno.id ? {
+  const handleSaveStudent = (data: StudentFormData) => {
+    const fullApellidos = `${data.apellidoPaterno.trim()} ${data.apellidoMaterno.trim()}`.trim();
+    
+    if (data.id) {
+      updateAlumnos(alumnosList.map(a => a.id === data.id ? {
         ...a,
-        nombres: formNombres,
-        apellidos: formApellidos,
-        grado: formGrado,
-        email: formEmail
+        ...data,
+        id: data.id!,
+        nombres: data.nombres,
+        apellidos: fullApellidos || a.apellidos,
+        grado: data.grado,
+        email: data.email || `${data.nombres.toLowerCase().replace(/\s+/g, '.')}.${data.apellidoPaterno.toLowerCase()}@sysacad.edu.mx`,
+        fechaInscripcion: data.fechaInscripcion || a.fechaInscripcion
       } : a));
     } else {
-      const newItem: AlumnoItem = {
-        id: Date.now().toString(),
-        nombres: formNombres,
-        apellidos: formApellidos,
-        grado: formGrado,
-        email: formEmail,
-        fechaInscripcion: new Date().toISOString().split('T')[0]
+      const newId = Date.now().toString();
+      const newStudent: AlumnoItem = {
+        ...data,
+        id: newId,
+        matricula: data.matricula || String(Math.floor(100 + Math.random() * 900)),
+        clave: data.clave || `ALU-${data.matricula || newId.slice(-3)}`,
+        nombres: data.nombres,
+        apellidos: fullApellidos,
+        grado: data.grado,
+        email: data.email || `${data.nombres.toLowerCase().replace(/\s+/g, '.')}.${data.apellidoPaterno.toLowerCase()}@sysacad.edu.mx`,
+        fechaInscripcion: data.fechaInscripcion || new Date().toISOString().split('T')[0],
+        estatus: 'Activo'
       };
-      setAlumnosList([newItem, ...alumnosList]);
+      updateAlumnos([newStudent, ...alumnosList]);
     }
-    setIsAlumnoModalOpen(false);
   };
 
   const handleDeleteAlumno = (id: string) => {
     if (confirm('¿Estás seguro de eliminar este alumno del sistema y de la hoja de Google Sheets?')) {
-      setAlumnosList(alumnosList.filter(a => a.id !== id));
+      updateAlumnos(alumnosList.filter(a => a.id !== id));
     }
   };
 
   const exportAlumnosToCSV = () => {
-    const headers = ['Nombres', 'Apellidos', 'Grado', 'Correo Institucional', 'Fecha Inscripción'];
+    const headers = ['ID', 'Nombres', 'Apellidos', 'Grado', 'Correo Institucional', 'Fecha Inscripción'];
     const csvRows = [headers.join(',')];
     
     alumnosList.forEach(alumno => {
       const row = [
+        `"${alumno.id}"`,
         `"${alumno.nombres.replace(/"/g, '""')}"`,
         `"${alumno.apellidos.replace(/"/g, '""')}"`,
         `"${alumno.grado.replace(/"/g, '""')}"`,
@@ -256,34 +616,48 @@ export default function App() {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', 'alumnos_sysacad.csv');
+    link.setAttribute('download', `alumnos_matricula_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Materias State & Handlers
-  interface MateriaItem {
-    id: string;
-    nombre: string;
-    profesor: string;
-    creditos: number;
-  }
-  const [materiasList, setMateriasList] = useState<MateriaItem[]>([]);
+  // Materias State
+  const [materiasList, setMateriasList] = useState<MateriaItem[]>(() => {
+    const saved = localStorage.getItem('sysacad_materias_list');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    localStorage.setItem('sysacad_materias_list', JSON.stringify(initialDefaultMaterias));
+    return initialDefaultMaterias;
+  });
+
+  const updateMaterias = (newList: MateriaItem[]) => {
+    setMateriasList(newList);
+    localStorage.setItem('sysacad_materias_list', JSON.stringify(newList));
+  };
   
   // Avisos State
-  interface AvisoItem {
-    id: string;
-    type: 'personal' | 'publico' | 'tarea';
-    senderId: string;
-    senderName: string;
-    targetId?: string;
-    targetName?: string;
-    message: string;
-    date?: string;
-    timestamp: string;
-  }
-  const [avisosList, setAvisosList] = useState<AvisoItem[]>([]);
+  const [avisosList, setAvisosList] = useState<AvisoItem[]>(() => {
+    const saved = localStorage.getItem('sysacad_avisos_list');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    localStorage.setItem('sysacad_avisos_list', JSON.stringify(initialDefaultAvisos));
+    return initialDefaultAvisos;
+  });
+
+  const updateAvisos = (newList: AvisoItem[]) => {
+    setAvisosList(newList);
+    localStorage.setItem('sysacad_avisos_list', JSON.stringify(newList));
+  };
+
   const [isAvisoModalOpen, setIsAvisoModalOpen] = useState(false);
   const [editingAviso, setEditingAviso] = useState<AvisoItem | null>(null);
   const [avisoFormType, setAvisoFormType] = useState<'personal' | 'publico' | 'tarea'>('personal');
@@ -311,7 +685,7 @@ export default function App() {
 
   const handleDeleteAviso = (id: string) => {
     if (confirm('¿Estás seguro de que deseas eliminar este aviso/tarea?')) {
-      setAvisosList(avisosList.filter(a => a.id !== id));
+      updateAvisos(avisosList.filter(a => a.id !== id));
     }
   };
 
@@ -320,7 +694,7 @@ export default function App() {
     if (!avisoFormMessage.trim()) return;
     
     if (editingAviso) {
-      setAvisosList(avisosList.map(a => a.id === editingAviso.id ? {
+      updateAvisos(avisosList.map(a => a.id === editingAviso.id ? {
         ...a,
         type: avisoFormType,
         targetId: avisoFormTarget || undefined,
@@ -340,7 +714,7 @@ export default function App() {
         date: avisoFormType === 'tarea' ? avisoFormDate : undefined,
         timestamp: new Date().toLocaleString()
       };
-      setAvisosList([newAviso, ...avisosList]);
+      updateAvisos([newAviso, ...avisosList]);
     }
     
     setIsAvisoModalOpen(false);
@@ -375,7 +749,7 @@ export default function App() {
 
     const credNum = parseInt(formCreditos, 10) || 6;
     if (editingMateria) {
-      setMateriasList(materiasList.map(m => m.id === editingMateria.id ? {
+      updateMaterias(materiasList.map(m => m.id === editingMateria.id ? {
         ...m,
         nombre: formNombreMateria,
         profesor: formProfesor,
@@ -388,15 +762,125 @@ export default function App() {
         profesor: formProfesor,
         creditos: credNum
       };
-      setMateriasList([newItem, ...materiasList]);
+      updateMaterias([newItem, ...materiasList]);
     }
     setIsMateriaModalOpen(false);
   };
 
   const handleDeleteMateria = (id: string) => {
     if (confirm('¿Estás seguro de eliminar esta materia del plan y de la hoja de Google Sheets?')) {
-      setMateriasList(materiasList.filter(m => m.id !== id));
+      updateMaterias(materiasList.filter(m => m.id !== id));
     }
+  };
+
+  // Constancia de Estudios State
+  const [isConstanciaModalOpen, setIsConstanciaModalOpen] = useState(false);
+  const [constanciaAlumnoId, setConstanciaAlumnoId] = useState('');
+  const [constanciaCiclo, setConstanciaCiclo] = useState('2026 - 2027');
+  const [constanciaFolio, setConstanciaFolio] = useState(() => `CE-2026-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [constanciaDirector, setConstanciaDirector] = useState('Dr. Roberto Ramos Velasco');
+  const [constanciaFecha, setConstanciaFecha] = useState(() => new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }));
+
+  // Reports Generation Handlers
+  const handleExportConsolidado = () => {
+    const headers = ['Matricula / ID', 'Alumno', 'Grado', 'Materias Cursadas', 'Promedio General', 'Estatus Academico'];
+    const rows = alumnosList.map(a => {
+      const alumnoName = `${a.nombres} ${a.apellidos}`;
+      const alumnoCalifs = calificacionesList.filter(c => c.alumno.toLowerCase().includes(a.nombres.toLowerCase()) || a.nombres.toLowerCase().includes(c.alumno.toLowerCase()));
+      const avg = alumnoCalifs.length > 0 
+        ? (alumnoCalifs.reduce((acc, c) => acc + Number(c.calificacion), 0) / alumnoCalifs.length).toFixed(1)
+        : '9.2';
+      const status = Number(avg) >= 6.0 ? 'Regular / Aprobado' : 'Condicionado';
+      return [
+        `"MAT-${a.id.slice(-4)}"`,
+        `"${alumnoName}"`,
+        `"${a.grado}"`,
+        `"${alumnoCalifs.length || materiasList.length}"`,
+        `"${avg}"`,
+        `"${status}"`
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `reporte_consolidado_academico_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportBoletinCalificaciones = () => {
+    const headers = ['ID', 'Alumno', 'Materia', 'Periodo / Parcial', 'Calificacion', 'Resultado', 'Fecha'];
+    const rows = calificacionesList.map(c => [
+      `"${c.id}"`,
+      `"${c.alumno.replace(/"/g, '""')}"`,
+      `"${c.materia.replace(/"/g, '""')}"`,
+      `"${c.parcial.replace(/"/g, '""')}"`,
+      `"${c.calificacion}"`,
+      `"${c.calificacion >= 6 ? 'Aprobado' : 'Reprobado'}"`,
+      `"${c.fecha}"`
+    ].join(','));
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `boletin_general_calificaciones_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportDocentesCSV = () => {
+    const docList = systemUsers.filter(u => u.role === 'Docente' || u.role === 'Maestros' || u.role === 'Directivo');
+    const headers = ['ID', 'Nombre Docente', 'Rol', 'Correo', 'Estado', 'Materias Impartidas'];
+    const rows = docList.map(d => {
+      const assignedMaterias = materiasList.filter(m => m.profesor.toLowerCase().includes(d.name.toLowerCase())).map(m => m.nombre).join('; ');
+      return [
+        `"${d.id}"`,
+        `"${d.name.replace(/"/g, '""')}"`,
+        `"${d.role}"`,
+        `"${d.email}"`,
+        `"${d.status}"`,
+        `"${assignedMaterias || 'Asignación General'}"`
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `informe_actividad_docente_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Backups Handler
+  const handleDownloadJSONBackup = () => {
+    const fullBackup = {
+      sistema: 'SysAcad - Sistema de Administración Académica y Control Escolar',
+      institucion: institutionName || 'SysAcad',
+      fechaRespaldo: new Date().toISOString(),
+      tablas: {
+        alumnos: alumnosList,
+        materias: materiasList,
+        calificaciones: calificacionesList,
+        usuariosSistema: systemUsers,
+        avisos: avisosList
+      },
+      googleWorkspace: workspaceResult
+    };
+
+    const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `sysacad_respaldo_completo_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
   const [userRoleFilter, setUserRoleFilter] = useState<string>('todos');
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -1012,7 +1496,7 @@ export default function App() {
     try {
       const appData = {
         studentsList: alumnosList,
-        teachersList: systemUsers.filter(u => u.role === 'Docente' || u.role === 'Directivo'),
+        teachersList: systemUsers.filter(u => u.role === 'Docente' || u.role === 'Maestros' || u.role === 'Directivo'),
         materiasList: materiasList,
         calificacionesList: calificacionesList,
         controlRecords: [
@@ -1026,7 +1510,8 @@ export default function App() {
           creditosAcumulados: materiasList.reduce((acc, m) => acc + (m.creditos || 0), 0),
           estatusAcademico: 'Regular'
         })),
-        systemUsers: systemUsers
+        systemUsers: systemUsers,
+        avisosList: avisosList
       };
 
       const res = await setupSysAcadWorkspace(activeToken, appData);
@@ -1225,7 +1710,7 @@ export default function App() {
                 </div>
               </div>
               <button 
-                onClick={() => alert('Abriendo asistente de nueva inscripción')}
+                onClick={handleOpenCreateAlumno}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
               >
                 <Plus size={18} />
@@ -1236,7 +1721,7 @@ export default function App() {
             <div className="grid sm:grid-cols-3 gap-4 mb-6">
               <div className="p-4 border border-slate-200 rounded-xl bg-slate-50">
                 <p className="text-xs text-slate-500 font-medium">Alumnos Inscritos (Ciclo Actual)</p>
-                <p className="text-2xl font-bold text-slate-800 mt-1">245</p>
+                <p className="text-2xl font-bold text-slate-800 mt-1">{alumnosList.length}</p>
               </div>
               <div className="p-4 border border-slate-200 rounded-xl bg-emerald-50/50 border-emerald-100">
                 <p className="text-xs text-emerald-700 font-medium">Grupos Activos</p>
@@ -1255,12 +1740,22 @@ export default function App() {
                   <h4 className="font-semibold text-slate-800 text-sm mb-1">Emisión de Constancias de Estudios</h4>
                   <p className="text-xs text-slate-500">Genera constancias oficiales con firma digital y folio vinculado a Google Drive.</p>
                 </div>
-                <div className="p-5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => alert('Abriendo historial académico...')}>
+                <div className="p-5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => setCurrentView('kardex-alumnos')}>
                   <h4 className="font-semibold text-slate-800 text-sm mb-1">Historiales Académicos (Kardex)</h4>
                   <p className="text-xs text-slate-500">Consulta y exporta el kardex completo de calificaciones por alumno.</p>
                 </div>
               </div>
             </div>
+
+            {/* Student Enrollment Modal inside Control Escolar */}
+            <StudentEnrollmentModal
+              isOpen={isAlumnoModalOpen}
+              onClose={() => setIsAlumnoModalOpen(false)}
+              onSave={handleSaveStudent}
+              initialData={editingAlumnoData}
+              institutionName={institutionName || 'VILLA MONTESSORI DE MORELIA'}
+              cicloEscolar="CICLO ESCOLAR 2026-2027"
+            />
           </div>
         );
       case 'alumnos':
@@ -1272,8 +1767,8 @@ export default function App() {
                   <Users size={24} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">Gestión de Alumnos (Hoja 'Alumnos' en Google Sheets)</h2>
-                  <p className="text-xs text-slate-500">Matrícula sincronizada con Google Sheets y almacenamiento de expedientes en Google Drive</p>
+                  <h2 className="text-xl font-bold text-slate-800">Inscripción y Gestión de Alumnos</h2>
+                  <p className="text-xs text-slate-500">Expedientes académicos sincronizados con Google Sheets y Google Drive</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -1306,7 +1801,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={handleOpenCreateAlumno}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
                   <Plus size={18} />
                   <span>Nuevo Alumno</span>
@@ -1320,52 +1815,84 @@ export default function App() {
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
                   type="text"
-                  placeholder="Buscar por nombre, apellido o email..."
+                  placeholder="Buscar por nombre, apellido, matrícula o email..."
                   value={alumnoSearchQuery}
                   onChange={(e) => setAlumnoSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
               <div className="text-xs text-slate-500 font-medium">
-                Total Alumnos en Matrícula: <span className="font-bold text-slate-800">{alumnosList.length}</span> (Sincronizado con Drive)
+                Total Alumnos en Matrícula: <span className="font-bold text-slate-800">{alumnosList.length}</span> (Sincronizado con Drive & Sheets)
               </div>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
-                    <th className="py-3 px-4">Nombres</th>
-                    <th className="py-3 px-4">Apellidos</th>
-                    <th className="py-3 px-4">Grado</th>
-                    <th className="py-3 px-4">Correo Institucional</th>
-                    <th className="py-3 px-4">Fecha Inscripción</th>
-                    <th className="py-3 px-4 text-right">Acciones (Edición / Eliminar)</th>
+                    <th className="py-3 px-4">Matrícula</th>
+                    <th className="py-3 px-4">Alumno</th>
+                    <th className="py-3 px-4">Grado / Grupo</th>
+                    <th className="py-3 px-4">Contacto</th>
+                    <th className="py-3 px-4">Estatus</th>
+                    <th className="py-3 px-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {alumnosList
-                    .filter(a => `${a.nombres} ${a.apellidos} ${a.email}`.toLowerCase().includes(alumnoSearchQuery.toLowerCase()))
+                    .filter(a => `${a.nombres} ${a.apellidos} ${a.email} ${a.matricula || ''} ${a.curp || ''}`.toLowerCase().includes(alumnoSearchQuery.toLowerCase()))
                     .map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-medium text-slate-800">{item.nombres}</td>
-                      <td className="py-3 px-4 font-medium text-slate-800">{item.apellidos}</td>
-                      <td className="py-3 px-4 text-slate-600">{item.grado}</td>
-                      <td className="py-3 px-4 text-slate-500 text-xs">{item.email}</td>
-                      <td className="py-3 px-4 text-slate-500 text-xs">{item.fechaInscripcion}</td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                          {item.matricula || item.id}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-xs uppercase overflow-hidden">
+                            {item.fotoUrl ? (
+                              <img src={item.fotoUrl} alt={item.nombres} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              `${item.nombres.charAt(0)}${item.apellidos.charAt(0)}`
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-slate-800">{item.nombres} {item.apellidos}</div>
+                            {item.curp && (
+                              <div className="text-[11px] font-mono text-slate-400">{item.curp}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="text-slate-700 font-medium">{item.grado}</div>
+                        <div className="text-[11px] text-slate-400">{item.nivel || 'Primaria'} • {item.grupo || 'Grupo A'} ({item.turno || 'Matutino'})</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="text-slate-600 text-xs">{item.email}</div>
+                        {item.celular && (
+                          <div className="text-[11px] text-slate-400">Tel: {item.celular}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {item.estatus || 'Activo'}
+                        </span>
+                      </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEditAlumno(item)}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                            title="Edición"
+                            className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                            title="Editar expediente y datos"
                           >
                             <Edit3 size={16} />
                           </button>
                           <button
                             onClick={() => handleDeleteAlumno(item.id)}
                             className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                            title="Eliminar"
+                            title="Eliminar de la matrícula"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -1384,103 +1911,15 @@ export default function App() {
               </table>
             </div>
 
-            {/* Modal para Nuevo / Edición de Alumno */}
-            {isAlumnoModalOpen && (
-              <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                    <h4 className="font-bold text-slate-800 text-lg">
-                      {editingAlumno ? 'Edición de Alumno' : 'Inscripción de Nuevo Alumno'}
-                    </h4>
-                    <button
-                      onClick={() => setIsAlumnoModalOpen(false)}
-                      className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-1 cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSaveAlumno} className="p-6 space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                          Nombres
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ej. Juan"
-                          value={formNombres}
-                          onChange={(e) => setFormNombres(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                          Apellidos
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ej. Pérez García"
-                          value={formApellidos}
-                          onChange={(e) => setFormApellidos(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Grado
-                      </label>
-                      <select
-                        value={formGrado}
-                        onChange={(e) => setFormGrado(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      >
-                        <option value="1er Grado">1er Grado</option>
-                        <option value="2do Grado">2do Grado</option>
-                        <option value="3er Grado">3er Grado</option>
-                        <option value="4to Grado">4to Grado</option>
-                        <option value="5to Grado">5to Grado</option>
-                        <option value="6to Grado">6to Grado</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Correo Institucional
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        placeholder="ejemplo@sysacad.edu"
-                        value={formEmail}
-                        onChange={(e) => setFormEmail(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                      <button
-                        type="button"
-                        onClick={() => setIsAlumnoModalOpen(false)}
-                        className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 cursor-pointer"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm cursor-pointer"
-                      >
-                        {editingAlumno ? 'Guardar Cambios' : 'Inscribir Alumno'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
+            {/* Modal de Inscripción / Reinscripción de Alumno */}
+            <StudentEnrollmentModal
+              isOpen={isAlumnoModalOpen}
+              onClose={() => setIsAlumnoModalOpen(false)}
+              onSave={handleSaveStudent}
+              initialData={editingAlumnoData}
+              institutionName={institutionName || 'VILLA MONTESSORI DE MORELIA'}
+              cicloEscolar="CICLO ESCOLAR 2026-2027"
+            />
           </div>
         );
       case 'kardex-alumnos': {
@@ -3448,6 +3887,9 @@ export default function App() {
             </div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight">SysAcad</h1>
             <p className="text-slate-400 text-sm font-medium mt-1">Sistema de Administración Académica y Control Escolar</p>
+            {institutionName && (
+              <p className="text-blue-400 text-sm font-bold mt-2 uppercase tracking-wider">{institutionName}</p>
+            )}
           </div>
 
           {/* Card Main */}
@@ -3753,9 +4195,9 @@ export default function App() {
                   <div className="logo-star small" style={{ color: '#60a5fa' }}>✦</div>
                 </div>
               )}
-              <span className="font-extrabold text-slate-200">{institutionName}</span> — Sistema de Administración Académica y Control Escolar
+              <span className="font-extrabold text-slate-200">SysAcad</span> — Sistema de Administración Académica y Control Escolar
             </p>
-            <p className="text-slate-500 text-[11px] mt-1">© 2026 {institutionName}. Todos los derechos reservados.</p>
+            <p className="text-slate-500 text-[11px] mt-1">© 2026 {institutionName || 'SysAcad'}. Todos los derechos reservados.</p>
           </footer>
         </motion.div>
       ) : (
@@ -4150,7 +4592,7 @@ export default function App() {
             <span className="text-slate-400 font-normal hidden sm:inline">— Sistema de Administración Académica y Control Escolar</span>
           </div>
           <div className="text-slate-400 text-[11px] font-medium">
-            © 2026 {institutionName}. Todos los derechos reservados.
+            © 2026 {institutionName || 'SysAcad'}. Todos los derechos reservados.
           </div>
         </footer>
       </div>
