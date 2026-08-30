@@ -2418,12 +2418,13 @@ export default function App() {
                           </label>
                           
                           <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 border border-slate-200 rounded-xl flex items-center justify-center overflow-hidden bg-slate-50 shrink-0">
+                            <div className="relative w-16 h-16 border border-slate-200 rounded-xl flex items-center justify-center overflow-hidden bg-slate-50 shrink-0">
                               {institutionLogo ? (
                                 <img src={institutionLogo} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                               ) : (
                                 <GraduationCap size={24} className="text-slate-400" />
                               )}
+                              <div className="logo-star">✦</div>
                             </div>
 
                             <div className="flex-1 space-y-2">
@@ -3148,8 +3149,9 @@ export default function App() {
 
           {/* Brand Header */}
           <div className="flex flex-col items-center mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="bg-blue-600 text-white p-3 rounded-2xl shadow-xl shadow-blue-600/10 mb-3 border border-blue-500/20">
+            <div className="relative bg-blue-600 text-white p-3 rounded-2xl shadow-xl shadow-blue-600/10 mb-3 border border-blue-500/20">
               <GraduationCap size={32} />
+              <div className="logo-star">✦</div>
             </div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight">SysAcad</h1>
             <p className="text-slate-400 text-sm font-medium mt-1">Sistema de Administración Académica y Control Escolar</p>
@@ -3226,14 +3228,16 @@ export default function App() {
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Usuario</label>
-                  <input
-                    type="text"
-                    required
-                    value={loginUsername}
-                    onChange={(e) => setLoginUsername(e.target.value)}
-                    placeholder="admin, control, maestro..."
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-600"
-                  />
+                  <div className="metallic-ring-wrapper">
+                    <input
+                      type="text"
+                      required
+                      value={loginUsername}
+                      onChange={(e) => setLoginUsername(e.target.value)}
+                      placeholder="admin, control, maestro..."
+                      className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
@@ -3252,14 +3256,16 @@ export default function App() {
                       ¿Olvidaste tu contraseña?
                     </button>
                   </div>
-                  <input
-                    type="password"
-                    required
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-600"
-                  />
+                  <div className="metallic-ring-wrapper">
+                    <input
+                      type="password"
+                      required
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                    />
+                  </div>
                 </div>
 
                 {/* CAPTCHA Section */}
@@ -3295,25 +3301,29 @@ export default function App() {
                         <RefreshCw size={16} />
                       </button>
                     </div>
-                    <input
-                      type="text"
-                      required
-                      maxLength={5}
-                      placeholder="Código"
-                      value={loginCaptchaInput}
-                      onChange={(e) => setLoginCaptchaInput(e.target.value)}
-                      className="w-28 text-center py-3 px-2 bg-slate-950 border border-slate-800 rounded-xl text-sm font-extrabold uppercase tracking-widest text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-600 shrink-0"
-                    />
+                    <div className="metallic-ring-wrapper">
+                      <input
+                        type="text"
+                        required
+                        maxLength={5}
+                        placeholder="Código"
+                        value={loginCaptchaInput}
+                        onChange={(e) => setLoginCaptchaInput(e.target.value)}
+                        className="metallic-ring-content w-28 text-center py-3 px-2 text-sm font-extrabold uppercase tracking-widest text-white transition-all placeholder:text-slate-600 shrink-0"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 cursor-pointer flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.98]"
-                >
-                  <Lock size={16} />
-                  <span>Iniciar Sesión</span>
-                </button>
+                <div className="metallic-ring-wrapper button-wrapper">
+                  <button
+                    type="submit"
+                    className="metallic-ring-content w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Lock size={16} />
+                    <span>Iniciar Sesión</span>
+                  </button>
+                </div>
 
                 {/* Informative Notice regarding enrollment */}
                 <div className="pt-3 border-t border-slate-800/60 text-center text-xs text-slate-400">
@@ -3340,35 +3350,41 @@ export default function App() {
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Correo Registrado</label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="ejemplo@sysacad.edu"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-600"
-                  />
+                  <div className="metallic-ring-wrapper">
+                    <input
+                      type="email"
+                      required
+                      placeholder="ejemplo@sysacad.edu"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Nueva Contraseña</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Mínimo 4 caracteres"
-                    value={forgotNewPassword}
-                    onChange={(e) => setForgotNewPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-600"
-                  />
+                  <div className="metallic-ring-wrapper">
+                    <input
+                      type="password"
+                      required
+                      placeholder="Mínimo 4 caracteres"
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                      className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                    />
+                  </div>
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 cursor-pointer flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.98]"
-                >
-                  <Unlock size={16} />
-                  <span>Actualizar Contraseña</span>
-                </button>
+                <div className="metallic-ring-wrapper button-wrapper">
+                  <button
+                    type="submit"
+                    className="metallic-ring-content w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Unlock size={16} />
+                    <span>Actualizar Contraseña</span>
+                  </button>
+                </div>
 
                 <button
                   type="button"
@@ -3401,26 +3417,30 @@ export default function App() {
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Nombre Completo del Alumno</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="ej. Juan Pérez García"
-                    value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-600"
-                  />
+                  <div className="metallic-ring-wrapper">
+                    <input
+                      type="text"
+                      required
+                      placeholder="ej. Juan Pérez García"
+                      value={studentName}
+                      onChange={(e) => setStudentName(e.target.value)}
+                      className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                    />
+                  </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed mt-2.5">
                     🛡️ No es necesario ingresar correo electrónico ni contraseña para alumnos. Solo ingrese su nombre para acceder al historial de calificaciones de su kardex.
                   </p>
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 cursor-pointer flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.98]"
-                >
-                  <GraduationCap size={18} />
-                  <span>Ingresar al Sistema</span>
-                </button>
+                <div className="metallic-ring-wrapper button-wrapper">
+                  <button
+                    type="submit"
+                    className="metallic-ring-content w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <GraduationCap size={18} />
+                    <span>Ingresar al Sistema</span>
+                  </button>
+                </div>
               </form>
             )}
 
@@ -3430,9 +3450,15 @@ export default function App() {
           <footer className="mt-8 text-center text-xs font-medium animate-in fade-in duration-500">
             <p className="flex items-center justify-center gap-1.5 text-slate-400">
               {institutionLogo ? (
-                <img src={institutionLogo} alt="Logo" className="w-5 h-5 object-contain shrink-0" referrerPolicy="no-referrer" />
+                <div className="relative">
+                  <img src={institutionLogo} alt="Logo" className="w-5 h-5 object-contain shrink-0" referrerPolicy="no-referrer" />
+                  <div className="logo-star small">✦</div>
+                </div>
               ) : (
-                <GraduationCap size={16} className="text-blue-500" />
+                <div className="relative">
+                  <GraduationCap size={16} className="text-blue-500" />
+                  <div className="logo-star small" style={{ color: '#60a5fa' }}>✦</div>
+                </div>
               )}
               <span className="font-extrabold text-slate-200">{institutionName}</span> — Sistema de Administración Académica y Control Escolar
             </p>
@@ -3464,12 +3490,13 @@ export default function App() {
         >
           <div className="p-4 flex items-center justify-between border-b border-slate-800 shrink-0">
             <div className="flex items-center gap-3 truncate min-w-0">
-              <div className="bg-blue-600 text-white p-2 rounded-lg shadow-sm shrink-0 flex items-center justify-center overflow-hidden w-9 h-9">
+              <div className="relative bg-blue-600 text-white p-2 rounded-lg shadow-sm shrink-0 flex items-center justify-center overflow-hidden w-9 h-9">
                 {institutionLogo ? (
                   <img src={institutionLogo} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                 ) : (
                   <GraduationCap size={20} />
                 )}
+                <div className="logo-star small">✦</div>
               </div>
               <div className="truncate min-w-0">
                 <h1 className="text-lg font-bold text-white leading-tight truncate">SysAcad</h1>
@@ -3715,12 +3742,13 @@ export default function App() {
               </button>
             )}
             <div className="flex items-center gap-3 min-w-0">
-              <div className="bg-blue-600 text-white p-2 rounded-xl shadow-sm shrink-0 flex items-center justify-center overflow-hidden w-9 h-9">
+              <div className="relative bg-blue-600 text-white p-2 rounded-xl shadow-sm shrink-0 flex items-center justify-center overflow-hidden w-9 h-9">
                 {institutionLogo ? (
                   <img src={institutionLogo} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                 ) : (
                   <GraduationCap size={20} />
                 )}
+                <div className="logo-star small">✦</div>
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 truncate">
