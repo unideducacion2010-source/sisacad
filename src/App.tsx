@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, GripVertical, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School } from 'lucide-react';
+import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, GripVertical, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId } from './auth';
@@ -49,7 +49,7 @@ export default function App() {
 
   // Unified System Users State (Administradores, Control Escolar, Docentes, Secretaría, Directivos)
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>(() => {
-    const saved = localStorage.getItem('sysacad_system_users') || localStorage.getItem('sysacad_registered_users');
+    const saved = localStorage.getItem('sysacad_system_users_v2');
     let parsed: any[] = [];
     if (saved) {
       try {
@@ -60,14 +60,11 @@ export default function App() {
     }
 
     const defaultUsers: SystemUser[] = [
-      { id: '1', username: 'admin', password: 'admin123', name: 'Administrador Principal', email: 'admin@sysacad.edu', role: 'Administrador', status: 'Activo', fechaRegistro: '2026-08-01', lastAccess: 'Hace 5 minutos' },
-      { id: '2', username: 'control', password: '123', name: 'Lic. Ana Gómez (Control Escolar)', email: 'control@sysacad.edu', role: 'Control Escolar', status: 'Activo', fechaRegistro: '2026-08-05', lastAccess: 'Ayer' },
-      { id: '3', username: 'maestro', password: '123', name: 'Prof. Carlos Mendoza', email: 'cmendoza@sysacad.edu', role: 'Maestros', status: 'Activo', fechaRegistro: '2026-08-10', lastAccess: 'Hace 2 horas' },
-      { id: '4', username: 'docente_sofia', password: '123', name: 'Lic. Sofía Rivas', email: 'srivas@sysacad.edu', role: 'Maestros', status: 'Activo', fechaRegistro: '2026-08-12', lastAccess: 'Hace 1 día' }
+      { id: '1', username: 'admin', password: 'admin123', name: 'Administrador Principal', email: 'admin@sysacad.edu', role: 'Administrador', status: 'Activo', fechaRegistro: '2026-08-01', lastAccess: 'Hace 5 minutos' }
     ];
 
     if (!parsed || parsed.length === 0) {
-      localStorage.setItem('sysacad_system_users', JSON.stringify(defaultUsers));
+      localStorage.setItem('sysacad_system_users_v2', JSON.stringify(defaultUsers));
       return defaultUsers;
     }
 
@@ -92,7 +89,7 @@ export default function App() {
       normalized[adminIdx] = { ...normalized[adminIdx], role: 'Administrador', password: 'admin123', status: 'Activo' };
     }
 
-    localStorage.setItem('sysacad_system_users', JSON.stringify(normalized));
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(normalized));
     return normalized;
   });
 
@@ -106,11 +103,7 @@ export default function App() {
     fecha: string;
   }
 
-  const [calificacionesList, setCalificacionesList] = useState<CalificacionItem[]>([
-    { id: '1', alumno: 'Juan Pérez García', materia: 'Matemáticas Avanzadas', parcial: 'Primer Parcial', calificacion: 9.5, fecha: '2026-08-15' },
-    { id: '2', alumno: 'María López Hernández', materia: 'Física I', parcial: 'Primer Parcial', calificacion: 8.8, fecha: '2026-08-15' },
-    { id: '3', alumno: 'Carlos Ruiz Morales', materia: 'Literatura Contemporánea', parcial: 'Primer Parcial', calificacion: 9.0, fecha: '2026-08-16' },
-  ]);
+  const [calificacionesList, setCalificacionesList] = useState<CalificacionItem[]>([]);
   const [califSearchQuery, setCalifSearchQuery] = useState('');
   const [isCalifModalOpen, setIsCalifModalOpen] = useState(false);
   const [editingCalif, setEditingCalif] = useState<CalificacionItem | null>(null);
@@ -179,11 +172,7 @@ export default function App() {
     email: string;
     fechaInscripcion: string;
   }
-  const [alumnosList, setAlumnosList] = useState<AlumnoItem[]>([
-    { id: '1', nombres: 'Juan', apellidos: 'Pérez García', grado: '1er Semestre', email: 'juan.perez@sysacad.edu', fechaInscripcion: '2026-08-10' },
-    { id: '2', nombres: 'María', apellidos: 'López Hernández', grado: '3er Semestre', email: 'maria.lopez@sysacad.edu', fechaInscripcion: '2025-08-12' },
-    { id: '3', nombres: 'Carlos', apellidos: 'Ruiz Morales', grado: '5to Semestre', email: 'carlos.ruiz@sysacad.edu', fechaInscripcion: '2024-08-14' },
-  ]);
+  const [alumnosList, setAlumnosList] = useState<AlumnoItem[]>([]);
   const [selectedAlumnoName, setSelectedAlumnoName] = useState('');
   const [selectedKardexTab, setSelectedKardexTab] = useState<'parcial' | 'final' | null>(null);
   const [kardexGrado, setKardexGrado] = useState('');
@@ -194,14 +183,14 @@ export default function App() {
   const [editingAlumno, setEditingAlumno] = useState<AlumnoItem | null>(null);
   const [formNombres, setFormNombres] = useState('');
   const [formApellidos, setFormApellidos] = useState('');
-  const [formGrado, setFormGrado] = useState('1er Semestre');
+  const [formGrado, setFormGrado] = useState('1er Grado');
   const [formEmail, setFormEmail] = useState('');
 
   const handleOpenCreateAlumno = () => {
     setEditingAlumno(null);
     setFormNombres('');
     setFormApellidos('');
-    setFormGrado('1er Semestre');
+    setFormGrado('1er Grado');
     setFormEmail('');
     setIsAlumnoModalOpen(true);
   };
@@ -247,6 +236,32 @@ export default function App() {
     }
   };
 
+  const exportAlumnosToCSV = () => {
+    const headers = ['Nombres', 'Apellidos', 'Grado', 'Correo Institucional', 'Fecha Inscripción'];
+    const csvRows = [headers.join(',')];
+    
+    alumnosList.forEach(alumno => {
+      const row = [
+        `"${alumno.nombres.replace(/"/g, '""')}"`,
+        `"${alumno.apellidos.replace(/"/g, '""')}"`,
+        `"${alumno.grado.replace(/"/g, '""')}"`,
+        `"${alumno.email.replace(/"/g, '""')}"`,
+        `"${alumno.fechaInscripcion.replace(/"/g, '""')}"`
+      ];
+      csvRows.push(row.join(','));
+    });
+    
+    const csvContent = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'alumnos_sysacad.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Materias State & Handlers
   interface MateriaItem {
     id: string;
@@ -254,11 +269,83 @@ export default function App() {
     profesor: string;
     creditos: number;
   }
-  const [materiasList, setMateriasList] = useState<MateriaItem[]>([
-    { id: '1', nombre: 'Matemáticas Avanzadas', profesor: 'Prof. Carlos Mendoza', creditos: 8 },
-    { id: '2', nombre: 'Física I', profesor: 'Prof. Carlos Mendoza', creditos: 6 },
-    { id: '3', nombre: 'Literatura Contemporánea', profesor: 'Lic. Sofía Rivas', creditos: 6 },
-  ]);
+  const [materiasList, setMateriasList] = useState<MateriaItem[]>([]);
+  
+  // Avisos State
+  interface AvisoItem {
+    id: string;
+    type: 'personal' | 'publico' | 'tarea';
+    senderId: string;
+    senderName: string;
+    targetId?: string;
+    targetName?: string;
+    message: string;
+    date?: string;
+    timestamp: string;
+  }
+  const [avisosList, setAvisosList] = useState<AvisoItem[]>([]);
+  const [isAvisoModalOpen, setIsAvisoModalOpen] = useState(false);
+  const [editingAviso, setEditingAviso] = useState<AvisoItem | null>(null);
+  const [avisoFormType, setAvisoFormType] = useState<'personal' | 'publico' | 'tarea'>('personal');
+  const [avisoFormTarget, setAvisoFormTarget] = useState('');
+  const [avisoFormMessage, setAvisoFormMessage] = useState('');
+  const [avisoFormDate, setAvisoFormDate] = useState('');
+
+  const handleOpenCreateAviso = (type: 'personal' | 'publico' | 'tarea') => {
+    setEditingAviso(null);
+    setAvisoFormType(type);
+    setAvisoFormTarget('');
+    setAvisoFormMessage('');
+    setAvisoFormDate('');
+    setIsAvisoModalOpen(true);
+  };
+
+  const handleOpenEditAviso = (aviso: AvisoItem) => {
+    setEditingAviso(aviso);
+    setAvisoFormType(aviso.type);
+    setAvisoFormTarget(aviso.targetId || '');
+    setAvisoFormMessage(aviso.message);
+    setAvisoFormDate(aviso.date || '');
+    setIsAvisoModalOpen(true);
+  };
+
+  const handleDeleteAviso = (id: string) => {
+    if (confirm('¿Estás seguro de que deseas eliminar este aviso/tarea?')) {
+      setAvisosList(avisosList.filter(a => a.id !== id));
+    }
+  };
+
+  const handleSaveAviso = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!avisoFormMessage.trim()) return;
+    
+    if (editingAviso) {
+      setAvisosList(avisosList.map(a => a.id === editingAviso.id ? {
+        ...a,
+        type: avisoFormType,
+        targetId: avisoFormTarget || undefined,
+        targetName: avisoFormTarget ? systemUsers.find(u => u.id === avisoFormTarget)?.name : undefined,
+        message: avisoFormMessage,
+        date: avisoFormType === 'tarea' ? avisoFormDate : undefined,
+      } : a));
+    } else {
+      const newAviso: AvisoItem = {
+        id: Date.now().toString(),
+        type: avisoFormType,
+        senderId: sessionUser?.id || '',
+        senderName: sessionUser?.name || 'Sistema',
+        targetId: avisoFormTarget || undefined,
+        targetName: avisoFormTarget ? systemUsers.find(u => u.id === avisoFormTarget)?.name : undefined,
+        message: avisoFormMessage,
+        date: avisoFormType === 'tarea' ? avisoFormDate : undefined,
+        timestamp: new Date().toLocaleString()
+      };
+      setAvisosList([newAviso, ...avisosList]);
+    }
+    
+    setIsAvisoModalOpen(false);
+  };
+
   const [materiaSearchQuery, setMateriaSearchQuery] = useState('');
   const [isMateriaModalOpen, setIsMateriaModalOpen] = useState(false);
   const [editingMateria, setEditingMateria] = useState<MateriaItem | null>(null);
@@ -379,7 +466,7 @@ export default function App() {
     }
 
     setSystemUsers(updatedList);
-    localStorage.setItem('sysacad_system_users', JSON.stringify(updatedList));
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedList));
     setIsUserModalOpen(false);
 
     // Sync to Google Sheets if connected
@@ -414,7 +501,7 @@ export default function App() {
       status: (u.status === 'Activo' ? 'Inactivo' : 'Activo') as 'Activo' | 'Inactivo'
     } : u);
     setSystemUsers(updated);
-    localStorage.setItem('sysacad_system_users', JSON.stringify(updated));
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
     if (token && workspaceResult?.spreadsheetId) {
       syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
     }
@@ -429,7 +516,7 @@ export default function App() {
     if (window.confirm('¿Está seguro de eliminar permanentemente este usuario del sistema?')) {
       const updated = systemUsers.filter(u => u.id !== id);
       setSystemUsers(updated);
-      localStorage.setItem('sysacad_system_users', JSON.stringify(updated));
+      localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
       if (token && workspaceResult?.spreadsheetId) {
         syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
       }
@@ -639,7 +726,7 @@ export default function App() {
     // Update last access
     const updatedUsers = systemUsers.map(u => u.id === foundUser!.id ? { ...u, lastAccess: 'Ahora' } : u);
     setSystemUsers(updatedUsers);
-    localStorage.setItem('sysacad_system_users', JSON.stringify(updatedUsers));
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedUsers));
 
     setSessionUser(foundUser);
     localStorage.setItem('sysacad_session_user', JSON.stringify(foundUser));
@@ -688,7 +775,7 @@ export default function App() {
     };
 
     setSystemUsers(updatedUsers);
-    localStorage.setItem('sysacad_system_users', JSON.stringify(updatedUsers));
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedUsers));
 
     if (token && workspaceResult?.spreadsheetId) {
       syncUsersToSheet(token, workspaceResult.spreadsheetId, updatedUsers).catch(console.error);
@@ -748,10 +835,10 @@ export default function App() {
     const role = sessionUser.role;
     if (role === 'Administrador') return true;
     if (role === 'Control Escolar') {
-      return ['control-escolar', 'alumnos', 'personal-usuarios', 'materias', 'reportes', 'kardex-alumnos'].includes(menuId);
+      return ['control-escolar', 'alumnos', 'personal-usuarios', 'materias', 'reportes', 'kardex-alumnos', 'maestros', 'avisos'].includes(menuId);
     }
     if (role === 'Maestros' || role === 'Docente') {
-      return ['maestros', 'calificaciones', 'kardex-alumnos'].includes(menuId);
+      return ['maestros', 'calificaciones', 'kardex-alumnos', 'avisos'].includes(menuId);
     }
     if (role === 'Alumno') {
       return ['kardex-alumnos'].includes(menuId);
@@ -1202,6 +1289,22 @@ export default function App() {
                   </a>
                 )}
                 <button 
+                  onClick={() => window.print()}
+                  className="bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Imprimir lista de alumnos"
+                >
+                  <Printer size={18} />
+                  <span className="hidden sm:inline">Imprimir</span>
+                </button>
+                <button 
+                  onClick={exportAlumnosToCSV}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Exportar matrícula a Excel"
+                >
+                  <Download size={18} />
+                  <span className="hidden sm:inline">Exportar a Excel</span>
+                </button>
+                <button 
                   onClick={handleOpenCreateAlumno}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
@@ -1234,7 +1337,7 @@ export default function App() {
                   <tr className="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
                     <th className="py-3 px-4">Nombres</th>
                     <th className="py-3 px-4">Apellidos</th>
-                    <th className="py-3 px-4">Grado / Semestre</th>
+                    <th className="py-3 px-4">Grado</th>
                     <th className="py-3 px-4">Correo Institucional</th>
                     <th className="py-3 px-4">Fecha Inscripción</th>
                     <th className="py-3 px-4 text-right">Acciones (Edición / Eliminar)</th>
@@ -1329,19 +1432,19 @@ export default function App() {
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Grado / Semestre
+                        Grado
                       </label>
                       <select
                         value={formGrado}
                         onChange={(e) => setFormGrado(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       >
-                        <option value="1er Semestre">1er Semestre</option>
-                        <option value="2do Semestre">2do Semestre</option>
-                        <option value="3er Semestre">3er Semestre</option>
-                        <option value="4to Semestre">4to Semestre</option>
-                        <option value="5to Semestre">5to Semestre</option>
-                        <option value="6to Semestre">6to Semestre</option>
+                        <option value="1er Grado">1er Grado</option>
+                        <option value="2do Grado">2do Grado</option>
+                        <option value="3er Grado">3er Grado</option>
+                        <option value="4to Grado">4to Grado</option>
+                        <option value="5to Grado">5to Grado</option>
+                        <option value="6to Grado">6to Grado</option>
                       </select>
                     </div>
 
@@ -1872,6 +1975,82 @@ export default function App() {
               </table>
             </div>
 
+            {/* Modal para Avisos y Tareas */}
+            {isAvisoModalOpen && (
+              <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                      {avisoFormType === 'tarea' ? <Calendar className="text-amber-500" size={20} /> : avisoFormType === 'publico' ? <Users className="text-indigo-500" size={20} /> : <Mail className="text-blue-500" size={20} />}
+                      {avisoFormType === 'tarea' ? 'Nueva Tarea Programada' : avisoFormType === 'publico' ? 'Nuevo Aviso Público' : 'Nuevo Aviso Personal'}
+                    </h4>
+                    <button onClick={() => setIsAvisoModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer">
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <form onSubmit={handleSaveAviso} className="p-6 space-y-4">
+                    {avisoFormType === 'personal' && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Destinatario</label>
+                        <select 
+                          required 
+                          value={avisoFormTarget}
+                          onChange={(e) => setAvisoFormTarget(e.target.value)}
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        >
+                          <option value="">Seleccione un destinatario...</option>
+                          {systemUsers.map(u => (
+                            <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    
+                    {avisoFormType === 'tarea' && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Fecha del Evento</label>
+                        <input 
+                          type="date" 
+                          required 
+                          value={avisoFormDate}
+                          onChange={(e) => setAvisoFormDate(e.target.value)}
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Mensaje</label>
+                      <textarea 
+                        required 
+                        rows={4}
+                        placeholder="Escribe el contenido del aviso aquí..."
+                        value={avisoFormMessage}
+                        onChange={(e) => setAvisoFormMessage(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setIsAvisoModalOpen(false)}
+                        className="px-4 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        type="submit" 
+                        className={`px-4 py-2.5 text-sm font-medium text-white rounded-xl transition-all shadow-sm cursor-pointer ${avisoFormType === 'tarea' ? 'bg-amber-600 hover:bg-amber-700' : avisoFormType === 'publico' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                      >
+                        {avisoFormType === 'tarea' ? 'Programar Tarea' : 'Enviar Aviso'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
             {/* Modal para Nueva / Edición de Materia */}
             {isMateriaModalOpen && (
               <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2163,6 +2342,9 @@ export default function App() {
           </div>
         );
       case 'maestros':
+        const teachersData = systemUsers.filter(u => u.role === 'Maestros' || u.role === 'Docente' || u.role === 'Directivo');
+        const materiasAsignadas = materiasList.length;
+        
         return (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-5xl mx-auto">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 mb-6">
@@ -2175,21 +2357,20 @@ export default function App() {
                   <p className="text-xs text-slate-500">Plantilla docente, asignación de materias y horarios</p>
                 </div>
               </div>
-
             </div>
             
             <div className="grid sm:grid-cols-3 gap-4 mb-6">
               <div className="p-4 border border-slate-200 rounded-xl bg-slate-50">
                 <p className="text-xs text-slate-500 font-medium">Total Profesores</p>
-                <p className="text-2xl font-bold text-slate-800 mt-1">12</p>
+                <p className="text-2xl font-bold text-slate-800 mt-1">{teachersData.length}</p>
               </div>
               <div className="p-4 border border-slate-200 rounded-xl bg-emerald-50/50 border-emerald-100">
                 <p className="text-xs text-emerald-700 font-medium">Activos este periodo</p>
-                <p className="text-2xl font-bold text-emerald-900 mt-1">12</p>
+                <p className="text-2xl font-bold text-emerald-900 mt-1">{teachersData.filter(t => t.status === 'Activo').length}</p>
               </div>
               <div className="p-4 border border-slate-200 rounded-xl bg-blue-50/50 border-blue-100">
-                <p className="text-xs text-blue-700 font-medium">Materias Asignadas</p>
-                <p className="text-2xl font-bold text-blue-900 mt-1">28</p>
+                <p className="text-xs text-blue-700 font-medium">Materias en Sistema</p>
+                <p className="text-2xl font-bold text-blue-900 mt-1">{materiasAsignadas}</p>
               </div>
             </div>
 
@@ -2198,33 +2379,138 @@ export default function App() {
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
                     <th className="py-3 px-4">Docente</th>
-                    <th className="py-3 px-4">Especialidad</th>
+                    <th className="py-3 px-4">Rol</th>
                     <th className="py-3 px-4">Correo</th>
                     <th className="py-3 px-4">Estado</th>
                     <th className="py-3 px-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  <tr>
-                    <td className="py-3.5 px-4 font-medium text-slate-800">Prof. Carlos Mendoza</td>
-                    <td className="py-3.5 px-4 text-slate-600">Matemáticas y Física</td>
-                    <td className="py-3.5 px-4 text-slate-500">cmendoza@sysacad.edu</td>
-                    <td className="py-3.5 px-4"><span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-medium">Activo</span></td>
-                    <td className="py-3.5 px-4 text-right">
-                      <button className="text-blue-600 hover:text-blue-800 font-medium text-xs bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors">Editar</button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-3.5 px-4 font-medium text-slate-800">Lic. Sofía Rivas</td>
-                    <td className="py-3.5 px-4 text-slate-600">Literatura e Historia</td>
-                    <td className="py-3.5 px-4 text-slate-500">srivas@sysacad.edu</td>
-                    <td className="py-3.5 px-4"><span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-medium">Activo</span></td>
-                    <td className="py-3.5 px-4 text-right">
-                      <button className="text-blue-600 hover:text-blue-800 font-medium text-xs bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors">Editar</button>
-                    </td>
-                  </tr>
+                  {teachersData.map((teacher) => (
+                    <tr key={teacher.id}>
+                      <td className="py-3.5 px-4 font-medium text-slate-800">{teacher.name}</td>
+                      <td className="py-3.5 px-4 text-slate-600">{teacher.role}</td>
+                      <td className="py-3.5 px-4 text-slate-500">{teacher.email}</td>
+                      <td className="py-3.5 px-4">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${teacher.status === 'Activo' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                          {teacher.status}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <button 
+                          onClick={() => {
+                            setCurrentView('personal-usuarios');
+                          }}
+                          className="text-blue-600 hover:text-blue-800 font-medium text-xs bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Ir a Usuarios
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {teachersData.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
+                        No hay docentes registrados. Da de alta uno en Personal / Usuarios.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        );
+      case 'avisos':
+        return (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-5xl mx-auto">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl">
+                  <Bell size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Avisos y Tareas Programadas</h2>
+                  <p className="text-xs text-slate-500">Gestión de comunicados y recordatorios de eventos</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => handleOpenCreateAviso('personal')}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
+                >
+                  <Mail size={18} />
+                  <span>Aviso Personal</span>
+                </button>
+                {sessionUser?.role !== 'Maestros' && sessionUser?.role !== 'Docente' && (
+                  <button 
+                    onClick={() => handleOpenCreateAviso('publico')}
+                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  >
+                    <Users size={18} />
+                    <span>Aviso Público</span>
+                  </button>
+                )}
+                <button 
+                  onClick={() => handleOpenCreateAviso('tarea')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                >
+                  <Calendar size={18} />
+                  <span>Tarea Programada</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {avisosList.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <Bell size={32} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-sm font-medium text-slate-500">No hay avisos ni tareas programadas.</p>
+                </div>
+              ) : (
+                avisosList.map((aviso) => (
+                  <div key={aviso.id} className={`p-5 rounded-xl border ${aviso.type === 'tarea' ? 'bg-amber-50 border-amber-100' : aviso.type === 'publico' ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg ${aviso.type === 'tarea' ? 'bg-amber-100 text-amber-600' : aviso.type === 'publico' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-600'}`}>
+                          {aviso.type === 'tarea' ? <Calendar size={18} /> : aviso.type === 'publico' ? <Users size={18} /> : <Mail size={18} />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${aviso.type === 'tarea' ? 'bg-amber-200 text-amber-800' : aviso.type === 'publico' ? 'bg-indigo-200 text-indigo-800' : 'bg-slate-200 text-slate-700'}`}>
+                              {aviso.type === 'tarea' ? 'Tarea Programada' : aviso.type === 'publico' ? 'Aviso Público' : 'Aviso Personal'}
+                            </span>
+                            <span className="text-xs text-slate-400 font-medium">{aviso.timestamp}</span>
+                          </div>
+                          <p className="text-sm text-slate-800 font-medium mb-1">
+                            {aviso.type === 'personal' && `De: ${aviso.senderName} Para: ${aviso.targetName || 'Desconocido'}`}
+                            {aviso.type === 'publico' && `De: ${aviso.senderName} Para: Todos`}
+                            {aviso.type === 'tarea' && `Fecha programada: ${aviso.date} (Por: ${aviso.senderName})`}
+                          </p>
+                          <p className="text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-100 mt-2">{aviso.message}</p>
+                        </div>
+                      </div>
+                      {(sessionUser?.role === 'Administrador' || sessionUser?.role === 'Control Escolar' || aviso.senderId === sessionUser?.id) && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button 
+                            onClick={() => handleOpenEditAviso(aviso)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
+                            title="Editar"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteAviso(aviso.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors cursor-pointer"
+                            title="Eliminar"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         );
@@ -2299,6 +2585,13 @@ export default function App() {
                     <p className="text-xs text-slate-500">Gestión de sistema, almacenamiento en la nube, usuarios y auditoría</p>
                   </div>
                 </div>
+                <button 
+                  onClick={() => setCurrentView('avisos')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer shrink-0"
+                >
+                  <Bell size={18} />
+                  <span>Administrar Avisos</span>
+                </button>
               </div>
 
               {/* Tabs */}
@@ -3274,8 +3567,8 @@ export default function App() {
                     <span>Código de Seguridad</span>
                     <span className="text-[10px] text-blue-400 font-semibold lowercase">imagen captcha</span>
                   </label>
-                  <div className="flex gap-3 items-center">
-                    <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-1.5 flex items-center justify-between shadow-inner relative group overflow-hidden">
+                  <div className="flex gap-4 items-stretch h-[60px]">
+                    <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-1 flex items-center justify-between shadow-inner relative group overflow-hidden">
                       <div className="flex-1 flex items-center justify-center">
                         <canvas
                           ref={captchaCanvasRef}
@@ -3301,7 +3594,7 @@ export default function App() {
                         <RefreshCw size={16} />
                       </button>
                     </div>
-                    <div className="metallic-ring-wrapper">
+                    <div className="metallic-ring-wrapper shrink-0 w-32">
                       <input
                         type="text"
                         required
@@ -3309,7 +3602,7 @@ export default function App() {
                         placeholder="Código"
                         value={loginCaptchaInput}
                         onChange={(e) => setLoginCaptchaInput(e.target.value)}
-                        className="metallic-ring-content w-28 text-center py-3 px-2 text-sm font-extrabold uppercase tracking-widest text-white transition-all placeholder:text-slate-600 shrink-0"
+                        className="metallic-ring-content w-full h-full text-center px-2 text-sm font-extrabold uppercase tracking-widest text-white transition-all placeholder:text-slate-600"
                       />
                     </div>
                   </div>
@@ -3550,7 +3843,7 @@ export default function App() {
                 className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left hover:scale-[1.02] active:scale-[0.98] ${
                   !isMenuAllowed('control-escolar')
                     ? 'cursor-not-allowed'
-                    : currentView === 'control-escolar' || currentView === 'alumnos' || currentView === 'materias' || currentView === 'reportes'
+                    : currentView === 'control-escolar' || currentView === 'alumnos' || currentView === 'materias' || currentView === 'maestros' || currentView === 'reportes' || currentView === 'avisos'
                     ? 'bg-slate-800/80 text-white font-medium cursor-pointer'
                     : 'hover:bg-slate-800 hover:text-white cursor-pointer'
                 }`}
@@ -3592,12 +3885,32 @@ export default function App() {
                   <button 
                     onClick={() => {
                       playNavigateSound();
+                      setCurrentView('maestros');
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer text-left hover:scale-[1.02] active:scale-[0.98] ${currentView === 'maestros' ? 'bg-blue-600 text-white shadow-sm font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  >
+                    <TeacherIcon size={16} className="shrink-0" />
+                    <span className="truncate">Maestros</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      playNavigateSound();
                       setCurrentView('reportes');
                     }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer text-left hover:scale-[1.02] active:scale-[0.98] ${currentView === 'reportes' ? 'bg-blue-600 text-white shadow-sm font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                   >
                     <FileText size={16} className="shrink-0" />
                     <span className="truncate">Reportes</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      playNavigateSound();
+                      setCurrentView('avisos');
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer text-left hover:scale-[1.02] active:scale-[0.98] ${currentView === 'avisos' ? 'bg-blue-600 text-white shadow-sm font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  >
+                    <Bell size={16} className="shrink-0" />
+                    <span className="truncate">Avisos y Tareas</span>
                   </button>
                 </div>
               )}
@@ -3616,7 +3929,7 @@ export default function App() {
                 className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left hover:scale-[1.02] active:scale-[0.98] ${
                   !isMenuAllowed('maestros')
                     ? 'cursor-not-allowed'
-                    : currentView === 'maestros' || currentView === 'calificaciones'
+                    : currentView === 'maestros' || currentView === 'calificaciones' || currentView === 'avisos'
                     ? 'bg-slate-800/80 text-white font-medium cursor-pointer'
                     : 'hover:bg-slate-800 hover:text-white cursor-pointer'
                 }`}
@@ -3660,6 +3973,16 @@ export default function App() {
                     </div>
                     <ExternalLink size={12} className="text-slate-500 shrink-0" />
                   </a>
+                  <button 
+                    onClick={() => {
+                      playNavigateSound();
+                      setCurrentView('avisos');
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer text-left hover:scale-[1.02] active:scale-[0.98] ${currentView === 'avisos' ? 'bg-blue-600 text-white shadow-sm font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  >
+                    <Bell size={16} className="shrink-0" />
+                    <span className="truncate">Avisos y Tareas</span>
+                  </button>
                 </div>
               )}
             </div>
