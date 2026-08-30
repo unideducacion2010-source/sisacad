@@ -9,6 +9,23 @@ export interface WorkspaceSetupResult {
   subfolders: { name: string; id: string; url: string }[];
 }
 
+export async function getDriveFileMetadata(token: string, fileId: string) {
+  try {
+    const url = `${DRIVE_API_URL}/${fileId}?fields=id,name,mimeType,trashed,parents,webViewLink`;
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data && !data.trashed) {
+      return data;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createDriveFolder(token: string, folderName: string, parentId?: string) {
   const body: any = {
     name: folderName,
@@ -37,14 +54,20 @@ export async function createDriveFolder(token: string, folderName: string, paren
 }
 
 export async function searchDriveFiles(token: string, query: string) {
-  const url = `${DRIVE_API_URL}?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,parents,webViewLink)&pageSize=20`;
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  });
-  if (!response.ok) return { files: [] };
-  return response.json();
+  try {
+    const url = `${DRIVE_API_URL}?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,parents,webViewLink,trashed)&pageSize=50&spaces=drive`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (!response.ok) return { files: [] };
+    const data = await response.json();
+    return { files: (data.files || []).filter((f: any) => !f.trashed) };
+  } catch (e) {
+    console.warn('Drive search error:', e);
+    return { files: [] };
+  }
 }
 
 export async function createSpreadsheet(token: string, title: string) {
@@ -85,6 +108,49 @@ export async function createFullMasterSpreadsheet(token: string, title: string) 
   return response.json();
 }
 
+export async function ensureSpreadsheetTabs(token: string, spreadsheetId: string) {
+  try {
+    const response = await fetch(`${SHEETS_API_URL}/${spreadsheetId}?fields=sheets.properties`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    const existingTitles: string[] = (data.sheets || []).map((s: any) => s.properties?.title).filter(Boolean);
+
+    const requiredTabs = [
+      'Alumnos',
+      'Maestros',
+      'Materias',
+      'Calificaciones',
+      'Control_Escolar',
+      'Kardex',
+      'Usuarios_Sistema',
+      'Avisos_y_Tareas'
+    ];
+
+    const missingTabs = requiredTabs.filter(tab => !existingTitles.includes(tab));
+
+    if (missingTabs.length > 0) {
+      const requests = missingTabs.map(tab => ({
+        addSheet: {
+          properties: { title: tab }
+        }
+      }));
+
+      await fetch(`${SHEETS_API_URL}/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requests })
+      });
+    }
+  } catch (err) {
+    console.warn('Error checking/adding missing spreadsheet tabs:', err);
+  }
+}
+
 export async function moveFileToFolder(token: string, fileId: string, folderId: string) {
   try {
     const getFileResponse = await fetch(`${DRIVE_API_URL}/${fileId}?fields=parents`, {
@@ -94,6 +160,10 @@ export async function moveFileToFolder(token: string, fileId: string, folderId: 
     
     const fileData = await getFileResponse.json();
     const previousParents = fileData.parents ? fileData.parents.join(',') : '';
+
+    if (fileData.parents && fileData.parents.includes(folderId)) {
+      return fileData; // Already in folder
+    }
 
     const response = await fetch(
       `${DRIVE_API_URL}/${fileId}?addParents=${folderId}&removeParents=${previousParents}`, 
@@ -262,14 +332,14 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
 
   // First clear old data A2:Z1000 in each sheet
   const clearRanges = [
-    'Alumnos!A2:I200',
-    'Maestros!A2:F200',
-    'Materias!A2:F200',
-    'Calificaciones!A2:G200',
-    'Control_Escolar!A2:F200',
-    'Kardex!A2:F200',
-    'Usuarios_Sistema!A2:H200',
-    'Avisos_y_Tareas!A2:G200'
+    'Alumnos!A2:I500',
+    'Maestros!A2:F500',
+    'Materias!A2:F500',
+    'Calificaciones!A2:G500',
+    'Control_Escolar!A2:F500',
+    'Kardex!A2:F500',
+    'Usuarios_Sistema!A2:H500',
+    'Avisos_y_Tareas!A2:G500'
   ];
 
   await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values:batchClear`, {
@@ -281,55 +351,78 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     body: JSON.stringify({ ranges: clearRanges })
   }).catch(e => console.warn('Clear non-fatal error:', e));
 
-  const dataToUpdate = [
-    { range: 'Alumnos!A2', values: alumnosRows.length ? alumnosRows : [['', '', '', '', '', '', '', '', '']] },
-    { range: 'Maestros!A2', values: maestrosRows.length ? maestrosRows : [['', '', '', '', '', '']] },
-    { range: 'Materias!A2', values: materiasRows.length ? materiasRows : [['', '', '', '', '', '']] },
-    { range: 'Calificaciones!A2', values: calificacionesRows.length ? calificacionesRows : [['', '', '', '', '', '', '']] },
-    { range: 'Control_Escolar!A2', values: controlRows.length ? controlRows : [['', '', '', '', '', '']] },
-    { range: 'Kardex!A2', values: kardexRows.length ? kardexRows : [['', '', '', '', '', '']] },
-    { range: 'Usuarios_Sistema!A2', values: usuariosRows.length ? usuariosRows : [['', '', '', '', '', '', '', '']] },
-    { range: 'Avisos_y_Tareas!A2', values: avisosRows.length ? avisosRows : [['', '', '', '', '', '', '']] }
-  ];
+  const dataToUpdate: any[] = [];
+  if (alumnosRows.length > 0) dataToUpdate.push({ range: 'Alumnos!A2', values: alumnosRows });
+  if (maestrosRows.length > 0) dataToUpdate.push({ range: 'Maestros!A2', values: maestrosRows });
+  if (materiasRows.length > 0) dataToUpdate.push({ range: 'Materias!A2', values: materiasRows });
+  if (calificacionesRows.length > 0) dataToUpdate.push({ range: 'Calificaciones!A2', values: calificacionesRows });
+  if (controlRows.length > 0) dataToUpdate.push({ range: 'Control_Escolar!A2', values: controlRows });
+  if (kardexRows.length > 0) dataToUpdate.push({ range: 'Kardex!A2', values: kardexRows });
+  if (usuariosRows.length > 0) dataToUpdate.push({ range: 'Usuarios_Sistema!A2', values: usuariosRows });
+  if (avisosRows.length > 0) dataToUpdate.push({ range: 'Avisos_y_Tareas!A2', values: avisosRows });
 
-  const response = await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values:batchUpdate`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      valueInputOption: 'USER_ENTERED',
-      data: dataToUpdate,
-    }),
-  });
+  if (dataToUpdate.length > 0) {
+    const response = await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        valueInputOption: 'USER_ENTERED',
+        data: dataToUpdate,
+      }),
+    });
 
-  if (!response.ok) {
-    const err = await response.text();
-    console.error('Error al sincronizar datos en Sheets:', err);
-    throw new Error('Error al sincronizar los datos en las hojas de Google Sheets');
+    if (!response.ok) {
+      const err = await response.text();
+      console.error('Error al sincronizar datos en Sheets:', err);
+      throw new Error('Error al sincronizar los datos en las hojas de Google Sheets');
+    }
+    return response.json();
   }
 
-  return response.json();
+  return { success: true };
 }
 
-export async function setupSysAcadWorkspace(token: string, appData: any): Promise<WorkspaceSetupResult> {
+export async function setupSysAcadWorkspace(token: string, appData: any, cachedResult?: WorkspaceSetupResult | null): Promise<WorkspaceSetupResult> {
   const rootFolderName = 'SysAcad - Almacenamiento y Control Escolar';
   let rootFolderId = '';
   let rootFolderUrl = '';
 
-  // 1. Check if Root Folder already exists
-  const existingFolders = await searchDriveFiles(token, `name='${rootFolderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-  if (existingFolders.files && existingFolders.files.length > 0) {
-    rootFolderId = existingFolders.files[0].id;
-    rootFolderUrl = existingFolders.files[0].webViewLink || `https://drive.google.com/drive/folders/${rootFolderId}`;
-  } else {
-    const rootFolder = await createDriveFolder(token, rootFolderName);
-    rootFolderId = rootFolder.id;
-    rootFolderUrl = rootFolder.webViewLink || `https://drive.google.com/drive/folders/${rootFolderId}`;
+  // 1. Verify if we have a valid cached or existing Root Folder
+  if (cachedResult?.rootFolderId) {
+    const meta = await getDriveFileMetadata(token, cachedResult.rootFolderId);
+    if (meta) {
+      rootFolderId = meta.id;
+      rootFolderUrl = meta.webViewLink || `https://drive.google.com/drive/folders/${rootFolderId}`;
+    }
   }
 
-  // 2. Create/Verify Subfolders for storage
+  // If not found from cache, search Drive for existing root folder
+  if (!rootFolderId) {
+    const existingFolders = await searchDriveFiles(token, `mimeType='application/vnd.google-apps.folder' and trashed=false and (name='${rootFolderName}' or name='SysAcad_Almacenamiento_Escolar' or name contains 'SysAcad')`);
+    if (existingFolders.files && existingFolders.files.length > 0) {
+      rootFolderId = existingFolders.files[0].id;
+      rootFolderUrl = existingFolders.files[0].webViewLink || `https://drive.google.com/drive/folders/${rootFolderId}`;
+    } else {
+      const rootFolder = await createDriveFolder(token, rootFolderName);
+      rootFolderId = rootFolder.id;
+      rootFolderUrl = rootFolder.webViewLink || `https://drive.google.com/drive/folders/${rootFolderId}`;
+    }
+  }
+
+  // 2. Query ALL existing subfolders inside root folder to prevent any duplicate subfolder creation
+  const existingSubfoldersRes = await searchDriveFiles(token, `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const existingSubfoldersMap = new Map<string, { id: string; url: string }>();
+
+  for (const f of existingSubfoldersRes.files || []) {
+    existingSubfoldersMap.set(f.name.toLowerCase().trim(), {
+      id: f.id,
+      url: f.webViewLink || `https://drive.google.com/drive/folders/${f.id}`
+    });
+  }
+
   const subfolderNames = [
     '01_Alumnos_Expedientes',
     '02_Maestros_y_Docentes',
@@ -345,38 +438,74 @@ export async function setupSysAcadWorkspace(token: string, appData: any): Promis
   const subfoldersList: { name: string; id: string; url: string }[] = [];
 
   for (const name of subfolderNames) {
-    const existing = await searchDriveFiles(token, `name='${name}' and '${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-    if (existing.files && existing.files.length > 0) {
-      const f = existing.files[0];
-      subfoldersList.push({ name: f.name, id: f.id, url: f.webViewLink || `https://drive.google.com/drive/folders/${f.id}` });
+    const normalizedName = name.toLowerCase().trim();
+    // Check exact name or base name (e.g. without 01_ prefix)
+    let existing = existingSubfoldersMap.get(normalizedName);
+    if (!existing) {
+      const baseName = name.replace(/^\d+_/, '').toLowerCase().trim();
+      for (const [k, v] of existingSubfoldersMap.entries()) {
+        if (k.includes(baseName) || baseName.includes(k.replace(/^\d+_/, ''))) {
+          existing = v;
+          break;
+        }
+      }
+    }
+
+    if (existing) {
+      subfoldersList.push({ name, id: existing.id, url: existing.url });
     } else {
       const created = await createDriveFolder(token, name, rootFolderId);
-      subfoldersList.push({ name, id: created.id, url: created.webViewLink || `https://drive.google.com/drive/folders/${created.id}` });
+      const url = created.webViewLink || `https://drive.google.com/drive/folders/${created.id}`;
+      subfoldersList.push({ name, id: created.id, url });
+      existingSubfoldersMap.set(normalizedName, { id: created.id, url });
     }
   }
 
-  // 3. Create or Search Master Spreadsheet
-  const spreadsheetTitle = 'SysAcad - Base de Datos Central.xlsx';
+  // 3. Search or verify Master Spreadsheet (Strict reuse to prevent duplicate spreadsheets)
+  const spreadsheetTitle = 'SysAcad - Base de Datos Central';
   let spreadsheetId = '';
   let spreadsheetUrl = '';
 
-  const existingSheet = await searchDriveFiles(token, `name='${spreadsheetTitle}' and trashed=false`);
-  if (existingSheet.files && existingSheet.files.length > 0) {
-    spreadsheetId = existingSheet.files[0].id;
-    spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
-  } else {
-    const sheetObj = await createFullMasterSpreadsheet(token, spreadsheetTitle);
-    spreadsheetId = sheetObj.spreadsheetId;
-    spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
-    
-    // Move spreadsheet into root Drive folder
-    await moveFileToFolder(token, spreadsheetId, rootFolderId);
+  // Check cached spreadsheet ID first
+  if (cachedResult?.spreadsheetId) {
+    const meta = await getDriveFileMetadata(token, cachedResult.spreadsheetId);
+    if (meta) {
+      spreadsheetId = meta.id;
+      spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+    }
   }
 
-  // 4. Write Headers for all 8 sheets
+  // If not found in cache, check inside Root Folder first
+  if (!spreadsheetId) {
+    const inRootSheet = await searchDriveFiles(token, `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`);
+    if (inRootSheet.files && inRootSheet.files.length > 0) {
+      spreadsheetId = inRootSheet.files[0].id;
+      spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+    }
+  }
+
+  // If not in root folder, search across Drive
+  if (!spreadsheetId) {
+    const existingSheet = await searchDriveFiles(token, `mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and (name contains 'SysAcad' or name contains 'Base de Datos Central')`);
+    if (existingSheet.files && existingSheet.files.length > 0) {
+      spreadsheetId = existingSheet.files[0].id;
+      spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+      await moveFileToFolder(token, spreadsheetId, rootFolderId);
+    } else {
+      const sheetObj = await createFullMasterSpreadsheet(token, spreadsheetTitle);
+      spreadsheetId = sheetObj.spreadsheetId;
+      spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+      await moveFileToFolder(token, spreadsheetId, rootFolderId);
+    }
+  }
+
+  // 4. Ensure all required sheet tabs exist without duplicating
+  await ensureSpreadsheetTabs(token, spreadsheetId);
+
+  // 5. Ensure master headers exist
   await writeAllMasterHeaders(token, spreadsheetId);
 
-  // 5. Sync all current data from app state into the sheets
+  // 6. Sync all current data from app state into the sheets (updates existing rows cleanly)
   await syncAllDataToSheets(token, spreadsheetId, appData);
 
   return {

@@ -39,17 +39,67 @@ export default function App() {
   const isResizingRef = useRef(false);
   const [muted, setMuted] = useState<boolean>(() => isSoundMuted());
 
+  interface DuplicateWarningState {
+    isOpen: boolean;
+    title?: string;
+    message: string;
+    detail?: string;
+    existingRecordSummary?: string;
+    onModify?: () => void;
+  }
+
+  const [duplicateWarning, setDuplicateWarning] = useState<DuplicateWarningState | null>(null);
+
   const handleToggleSound = () => {
     const isNowMuted = toggleSoundMute();
     setMuted(isNowMuted);
   };
 
+  // Effect to ensure system is 100% clean with only the administrator
   useEffect(() => {
-    document.title = 'SysAcad';
+    const isCleaned = localStorage.getItem('sysacad_clean_system_v4');
+    if (!isCleaned) {
+      const adminOnly: SystemUser[] = [
+        { 
+          id: '1', 
+          username: 'admin', 
+          password: 'admin123', 
+          name: 'Administrador Principal', 
+          email: 'admin@sysacad.edu', 
+          role: 'Administrador', 
+          status: 'Activo', 
+          fechaRegistro: new Date().toISOString().split('T')[0], 
+          lastAccess: 'Reciente' 
+        }
+      ];
+      setSystemUsers(adminOnly);
+      setAlumnosList([]);
+      setMateriasList([]);
+      setCalificacionesList([]);
+      setAvisosList([]);
+      localStorage.setItem('sysacad_system_users_v2', JSON.stringify(adminOnly));
+      localStorage.setItem('sysacad_alumnos_list', JSON.stringify([]));
+      localStorage.setItem('sysacad_materias_list', JSON.stringify([]));
+      localStorage.setItem('sysacad_calificaciones_list', JSON.stringify([]));
+      localStorage.setItem('sysacad_avisos_list', JSON.stringify([]));
+      localStorage.setItem('sysacad_clean_system_v4', 'true');
+    }
   }, []);
 
-  // Unified System Users State (Administradores, Control Escolar, Docentes, Secretaría, Directivos)
+  // Unified System Users State (Only Administrator account)
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>(() => {
+    const adminUser: SystemUser = { 
+      id: '1', 
+      username: 'admin', 
+      password: 'admin123', 
+      name: 'Administrador Principal', 
+      email: 'admin@sysacad.edu', 
+      role: 'Administrador', 
+      status: 'Activo', 
+      fechaRegistro: new Date().toISOString().split('T')[0], 
+      lastAccess: 'Reciente' 
+    };
+
     const saved = localStorage.getItem('sysacad_system_users_v2');
     let parsed: any[] = [];
     if (saved) {
@@ -60,38 +110,12 @@ export default function App() {
       }
     }
 
-    const defaultUsers: SystemUser[] = [
-      { id: '1', username: 'admin', password: 'admin123', name: 'Administrador Principal', email: 'admin@sysacad.edu', role: 'Administrador', status: 'Activo', fechaRegistro: '2026-08-01', lastAccess: 'Hace 5 minutos' }
-    ];
-
-    if (!parsed || parsed.length === 0) {
-      localStorage.setItem('sysacad_system_users_v2', JSON.stringify(defaultUsers));
-      return defaultUsers;
-    }
-
-    // Normalize any legacy format
-    const normalized: SystemUser[] = parsed.map((u, i) => ({
-      id: u.id || `${Date.now()}-${i}`,
-      username: u.username || (u.name ? u.name.toLowerCase().replace(/\s+/g, '_') : `user_${i + 1}`),
-      password: u.password || '123456',
-      name: u.name || u.nombre || u.username || 'Usuario',
-      email: u.email || '',
-      role: u.role || 'Control Escolar',
-      status: u.status || 'Activo',
-      fechaRegistro: u.fechaRegistro || '2026-08-01',
-      lastAccess: u.lastAccess || 'Reciente'
-    }));
-
-    // Ensure admin user exists with admin123 password
-    const adminIdx = normalized.findIndex(u => u.username.toLowerCase() === 'admin');
-    if (adminIdx === -1) {
-      normalized.unshift(defaultUsers[0]);
-    } else {
-      normalized[adminIdx] = { ...normalized[adminIdx], role: 'Administrador', password: 'admin123', status: 'Activo' };
-    }
-
-    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(normalized));
-    return normalized;
+    // Filter to only keep administrator or return fresh admin if clean
+    const filtered = parsed.filter(u => u.username?.toLowerCase() === 'admin' || u.role === 'Administrador');
+    const result = filtered.length > 0 ? filtered.map(u => ({ ...u, password: u.password || 'admin123', role: 'Administrador' as const, status: 'Activo' as const })) : [adminUser];
+    
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(result));
+    return result;
   });
 
   // Interfaces
@@ -178,218 +202,11 @@ export default function App() {
     timestamp: string;
   }
 
-  // Initial Default Datasets
-  const initialDefaultAlumnos: AlumnoItem[] = [
-    { 
-      id: '1', 
-      matricula: '439',
-      clave: 'ALU-439',
-      nombres: 'Juan Carlos', 
-      apellidos: 'Pérez Hernández', 
-      apellidoPaterno: 'Pérez',
-      apellidoMaterno: 'Hernández',
-      genero: 'Masculino',
-      fechaNacimiento: '2018-05-14',
-      lugarNacimiento: 'Morelia, Michoacán',
-      nacionalidad: 'Mexicana',
-      curp: 'PEHJ180514HMNRN02',
-      calleNumero: 'Av. Camelinas #1450',
-      colonia: 'Bosques de las Lomas',
-      codigoPostal: '58000',
-      entreCalles: 'Pino y Roble',
-      municipio: 'Morelia',
-      estado: 'Michoacán',
-      nivel: 'Primaria',
-      grado: '1er Grado', 
-      grupo: 'Grupo A',
-      turno: 'Matutino',
-      email: 'juan.perez@sysacad.edu.mx', 
-      celular: '443 123 4567',
-      telefonoCasa: '443 312 0000',
-      nombrePadreTutor: 'Roberto Pérez Flores',
-      nombreMadre: 'Elena Hernández',
-      parentescoTutor: 'Padre',
-      ocupacionTutor: 'Ingeniero Civil',
-      telefonoEmergencia: '443 987 6543',
-      emailTutor: 'rperez@gmail.com',
-      escuelaProcedencia: 'Colegio Montessori Morelia',
-      promedioAnterior: '9.5',
-      razonSocial: 'Roberto Pérez Flores',
-      rfc: 'PEFR800101XYZ',
-      regimenFiscal: '605 - Sueldos y Salarios',
-      usoCfdi: 'D10 - Pagos por servicios educativos (colegiaturas)',
-      emailFacturacion: 'facturacion.perez@gmail.com',
-      cuotaInscripcion: '3500',
-      colegiaturaMensual: '4200',
-      porcentajeBeca: '0',
-      diaLimitePago: '10',
-      docActaNacimiento: true,
-      docCurp: true,
-      docCertificadoMedico: true,
-      docCartaConducta: true,
-      docComprobanteDomicilio: true,
-      docFotos: true,
-      docComprobantePago: true,
-      estatus: 'Activo',
-      fechaInscripcion: '2026-08-15' 
-    },
-    { 
-      id: '2', 
-      matricula: '440',
-      clave: 'ALU-440',
-      nombres: 'María Elena', 
-      apellidos: 'Gómez Flores', 
-      apellidoPaterno: 'Gómez',
-      apellidoMaterno: 'Flores',
-      genero: 'Femenino',
-      fechaNacimiento: '2017-09-22',
-      lugarNacimiento: 'Morelia, Michoacán',
-      nacionalidad: 'Mexicana',
-      curp: 'GOFM170922MMNLR05',
-      calleNumero: 'Calle Ventura Puente #320',
-      colonia: 'Centro Histórico',
-      codigoPostal: '58010',
-      entreCalles: 'Madero y Morelos',
-      municipio: 'Morelia',
-      estado: 'Michoacán',
-      nivel: 'Primaria',
-      grado: '2do Grado', 
-      grupo: 'Grupo B',
-      turno: 'Matutino',
-      email: 'maria.gomez@sysacad.edu.mx', 
-      celular: '443 234 5678',
-      telefonoCasa: '443 313 1122',
-      nombrePadreTutor: 'Ignacio Gómez Ortiz',
-      nombreMadre: 'Rosa Flores',
-      parentescoTutor: 'Padre',
-      telefonoEmergencia: '443 765 4321',
-      estatus: 'Activo',
-      fechaInscripcion: '2026-08-16' 
-    },
-    { 
-      id: '3', 
-      matricula: '441',
-      clave: 'ALU-441',
-      nombres: 'Carlos Alberto', 
-      apellidos: 'Ruiz Sánchez', 
-      apellidoPaterno: 'Ruiz',
-      apellidoMaterno: 'Sánchez',
-      genero: 'Masculino',
-      fechaNacimiento: '2018-02-10',
-      lugarNacimiento: 'Uruapan, Michoacán',
-      nacionalidad: 'Mexicana',
-      curp: 'RUSC180210HMNZR09',
-      calleNumero: 'Paseo de la Reforma #89',
-      colonia: 'Tres Marías',
-      codigoPostal: '58254',
-      entreCalles: 'Paseo del Valle',
-      municipio: 'Morelia',
-      estado: 'Michoacán',
-      nivel: 'Primaria',
-      grado: '1er Grado', 
-      grupo: 'Grupo A',
-      turno: 'Matutino',
-      email: 'carlos.ruiz@sysacad.edu.mx', 
-      celular: '443 345 6789',
-      telefonoCasa: '443 324 5566',
-      nombrePadreTutor: 'Carlos Ruiz Morales',
-      nombreMadre: 'Ana Sánchez',
-      parentescoTutor: 'Padre',
-      telefonoEmergencia: '443 654 3210',
-      estatus: 'Activo',
-      fechaInscripcion: '2026-08-18' 
-    },
-    { 
-      id: '4', 
-      matricula: '442',
-      clave: 'ALU-442',
-      nombres: 'Ana Sofía', 
-      apellidos: 'Torres Morales', 
-      apellidoPaterno: 'Torres',
-      apellidoMaterno: 'Morales',
-      genero: 'Femenino',
-      fechaNacimiento: '2016-11-05',
-      lugarNacimiento: 'Morelia, Michoacán',
-      nacionalidad: 'Mexicana',
-      curp: 'TOMA161105MMNRL03',
-      calleNumero: 'Blvd. García de León #650',
-      colonia: 'Chapultepec Sur',
-      codigoPostal: '58260',
-      entreCalles: 'Artilleros del 47',
-      municipio: 'Morelia',
-      estado: 'Michoacán',
-      nivel: 'Primaria',
-      grado: '3er Grado', 
-      grupo: 'Grupo A',
-      turno: 'Matutino',
-      email: 'ana.torres@sysacad.edu.mx', 
-      celular: '443 456 7890',
-      telefonoCasa: '443 315 7788',
-      nombrePadreTutor: 'Eduardo Torres Díaz',
-      nombreMadre: 'Patricia Morales',
-      parentescoTutor: 'Padre',
-      telefonoEmergencia: '443 543 2109',
-      estatus: 'Activo',
-      fechaInscripcion: '2026-08-20' 
-    },
-    { 
-      id: '5', 
-      matricula: '443',
-      clave: 'ALU-443',
-      nombres: 'Luis Fernando', 
-      apellidos: 'Ramírez Castro', 
-      apellidoPaterno: 'Ramírez',
-      apellidoMaterno: 'Castro',
-      genero: 'Masculino',
-      fechaNacimiento: '2017-04-18',
-      lugarNacimiento: 'Pátzcuaro, Michoacán',
-      nacionalidad: 'Mexicana',
-      curp: 'RACL170418HMNTZ01',
-      calleNumero: 'Av. Acueducto #1120',
-      colonia: 'Villas del Pedregal',
-      codigoPostal: '58341',
-      entreCalles: 'Av. Las Aves',
-      municipio: 'Morelia',
-      estado: 'Michoacán',
-      nivel: 'Primaria',
-      grado: '2do Grado', 
-      grupo: 'Grupo B',
-      turno: 'Matutino',
-      email: 'luis.ramirez@sysacad.edu.mx', 
-      celular: '443 567 8901',
-      telefonoCasa: '443 316 9900',
-      nombrePadreTutor: 'Fernando Ramírez Silva',
-      nombreMadre: 'Claudia Castro',
-      parentescoTutor: 'Padre',
-      telefonoEmergencia: '443 432 1098',
-      estatus: 'Activo',
-      fechaInscripcion: '2026-08-22' 
-    }
-  ];
-
-  const initialDefaultMaterias: MateriaItem[] = [
-    { id: '1', nombre: 'Matemáticas I', profesor: 'Prof. Carlos Mendoza', creditos: 8 },
-    { id: '2', nombre: 'Lengua Española y Literatura', profesor: 'Profra. Rosa Elena Silva', creditos: 6 },
-    { id: '3', nombre: 'Historia de México', profesor: 'Prof. Fernando Morales', creditos: 6 },
-    { id: '4', nombre: 'Biología y Ciencias Naturales', profesor: 'Profra. Carmen Ortiz', creditos: 6 },
-    { id: '5', nombre: 'Física General', profesor: 'Prof. Roberto Vargas', creditos: 8 },
-    { id: '6', nombre: 'Química Orgánica', profesor: 'Profra. Marcela Romero', creditos: 8 },
-    { id: '7', nombre: 'Inglés Técnico', profesor: 'Profra. Diana Jiménez', creditos: 4 },
-    { id: '8', nombre: 'Tecnologías de la Información', profesor: 'Prof. Alejandro Ríos', creditos: 6 }
-  ];
-
-  const initialDefaultCalificaciones: CalificacionItem[] = [
-    { id: '1', alumno: 'Juan Carlos Pérez Hernández', materia: 'Matemáticas I', parcial: 'Primer Parcial', calificacion: 9.5, fecha: '2026-08-25' },
-    { id: '2', alumno: 'Juan Carlos Pérez Hernández', materia: 'Lengua Española y Literatura', parcial: 'Primer Parcial', calificacion: 9.0, fecha: '2026-08-25' },
-    { id: '3', alumno: 'María Elena Gómez Flores', materia: 'Matemáticas I', parcial: 'Primer Parcial', calificacion: 10.0, fecha: '2026-08-25' },
-    { id: '4', alumno: 'Carlos Alberto Ruiz Sánchez', materia: 'Historia de México', parcial: 'Primer Parcial', calificacion: 8.5, fecha: '2026-08-25' },
-    { id: '5', alumno: 'Ana Sofía Torres Morales', materia: 'Biología y Ciencias Naturales', parcial: 'Primer Parcial', calificacion: 9.8, fecha: '2026-08-25' }
-  ];
-
-  const initialDefaultAvisos: AvisoItem[] = [
-    { id: '1', type: 'publico', senderId: '1', senderName: 'Administrador Principal', message: 'Bienvenido al ciclo escolar 2026. La plataforma SysAcad se encuentra conectada con Google Drive y Google Sheets.', timestamp: 'Hoy, 09:00 AM' },
-    { id: '2', type: 'tarea', senderId: '1', senderName: 'Control Escolar', message: 'Cierre y entrega de actas de calificaciones del primer parcial.', date: '2026-09-30', timestamp: 'Ayer, 02:30 PM' }
-  ];
+  // Initial Empty Datasets (Clean system)
+  const initialDefaultAlumnos: AlumnoItem[] = [];
+  const initialDefaultMaterias: MateriaItem[] = [];
+  const initialDefaultCalificaciones: CalificacionItem[] = [];
+  const initialDefaultAvisos: AvisoItem[] = [];
 
   // Calificaciones State
   const [calificacionesList, setCalificacionesList] = useState<CalificacionItem[]>(() => {
@@ -436,7 +253,33 @@ export default function App() {
 
   const handleSaveCalif = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formCalifAlumno.trim() || !formCalifMateria.trim()) return;
+    const trimmedAlumno = formCalifAlumno.trim();
+    const trimmedMateria = formCalifMateria.trim();
+    const trimmedParcial = formCalifParcial.trim();
+    if (!trimmedAlumno || !trimmedMateria) return;
+
+    const duplicateCalif = calificacionesList.find(c => {
+      if (editingCalif && c.id === editingCalif.id) return false;
+      return c.alumno.trim().toLowerCase() === trimmedAlumno.toLowerCase() &&
+             c.materia.trim().toLowerCase() === trimmedMateria.toLowerCase() &&
+             c.parcial.trim().toLowerCase() === trimmedParcial.toLowerCase();
+    });
+
+    if (duplicateCalif) {
+      playErrorSound();
+      setDuplicateWarning({
+        isOpen: true,
+        title: '¡Calificación ya capturada!',
+        message: '¡El registro ya existe, tienes la opción de mejor modificarlo!',
+        detail: `Ya existe una calificación registrada para el alumno "${duplicateCalif.alumno}" en la materia "${duplicateCalif.materia}" para el período "${duplicateCalif.parcial}".`,
+        existingRecordSummary: `Alumno: ${duplicateCalif.alumno} • Materia: ${duplicateCalif.materia} • ${duplicateCalif.parcial}: ${duplicateCalif.calificacion.toFixed(1)} (Fecha: ${duplicateCalif.fecha})`,
+        onModify: () => {
+          setDuplicateWarning(null);
+          handleOpenEditCalif(duplicateCalif);
+        }
+      });
+      return;
+    }
 
     const numVal = parseFloat(formCalifVal) || 0;
     if (editingCalif) {
@@ -557,8 +400,51 @@ export default function App() {
     setIsAlumnoModalOpen(true);
   };
 
-  const handleSaveStudent = (data: StudentFormData) => {
+  const handleSaveStudent = (data: StudentFormData): boolean => {
     const fullApellidos = `${data.apellidoPaterno.trim()} ${data.apellidoMaterno.trim()}`.trim();
+    const normalizedNewName = data.nombres.trim().toLowerCase();
+    const normalizedNewApellidos = fullApellidos.toLowerCase();
+    const normalizedCurp = data.curp ? data.curp.trim().toUpperCase() : '';
+    const normalizedMatricula = data.matricula ? data.matricula.trim().toUpperCase() : '';
+
+    const duplicateAlumno = alumnosList.find(a => {
+      if (data.id && a.id === data.id) return false;
+      
+      // Match CURP if provided and valid length
+      if (normalizedCurp && normalizedCurp.length >= 4 && a.curp && a.curp.trim().toUpperCase() === normalizedCurp) {
+        return true;
+      }
+      // Match Matricula if provided
+      if (normalizedMatricula && a.matricula && a.matricula.trim().toUpperCase() === normalizedMatricula) {
+        return true;
+      }
+      // Match exact full name
+      const existingFullName = `${a.nombres.trim()} ${a.apellidos.trim()}`.toLowerCase();
+      const candidateFullName = `${normalizedNewName} ${normalizedNewApellidos}`;
+      if (existingFullName === candidateFullName && candidateFullName.length > 2) {
+        return true;
+      }
+      return false;
+    });
+
+    if (duplicateAlumno) {
+      playErrorSound();
+      setDuplicateWarning({
+        isOpen: true,
+        title: '¡El Alumno ya se encuentra registrado!',
+        message: '¡El registro ya existe, tienes la opción de mejor modificarlo!',
+        detail: `Ya existe un expediente registrado con los mismos datos en el sistema escolar.`,
+        existingRecordSummary: `${duplicateAlumno.nombres} ${duplicateAlumno.apellidos} • ${duplicateAlumno.grado} • Matrícula: ${duplicateAlumno.matricula || duplicateAlumno.id}${duplicateAlumno.curp ? ` • CURP: ${duplicateAlumno.curp}` : ''}`,
+        onModify: () => {
+          setDuplicateWarning(null);
+          setIsAlumnoModalOpen(false);
+          setTimeout(() => {
+            handleOpenEditAlumno(duplicateAlumno);
+          }, 100);
+        }
+      });
+      return false;
+    }
     
     if (data.id) {
       updateAlumnos(alumnosList.map(a => a.id === data.id ? {
@@ -587,6 +473,7 @@ export default function App() {
       };
       updateAlumnos([newStudent, ...alumnosList]);
     }
+    return true;
   };
 
   const handleDeleteAlumno = (id: string) => {
@@ -692,6 +579,29 @@ export default function App() {
   const handleSaveAviso = (e: React.FormEvent) => {
     e.preventDefault();
     if (!avisoFormMessage.trim()) return;
+
+    const duplicateAviso = avisosList.find(a => {
+      if (editingAviso && a.id === editingAviso.id) return false;
+      return a.type === avisoFormType &&
+             a.message.trim().toLowerCase() === avisoFormMessage.trim().toLowerCase() &&
+             (a.targetId || '') === (avisoFormTarget || '');
+    });
+
+    if (duplicateAviso) {
+      playErrorSound();
+      setDuplicateWarning({
+        isOpen: true,
+        title: '¡El Aviso o Tarea ya existe!',
+        message: '¡El registro ya existe, tienes la opción de mejor modificarlo!',
+        detail: `Ya se encuentra publicado un aviso con el mismo contenido y destinatario.`,
+        existingRecordSummary: `${duplicateAviso.type.toUpperCase()}: ${duplicateAviso.message.slice(0, 60)}... (${duplicateAviso.timestamp})`,
+        onModify: () => {
+          setDuplicateWarning(null);
+          handleOpenEditAviso(duplicateAviso);
+        }
+      });
+      return;
+    }
     
     if (editingAviso) {
       updateAvisos(avisosList.map(a => a.id === editingAviso.id ? {
@@ -745,7 +655,29 @@ export default function App() {
 
   const handleSaveMateria = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formNombreMateria.trim()) return;
+    const trimmedMateriaName = formNombreMateria.trim();
+    if (!trimmedMateriaName) return;
+
+    const duplicateMateria = materiasList.find(m => {
+      if (editingMateria && m.id === editingMateria.id) return false;
+      return m.nombre.trim().toLowerCase() === trimmedMateriaName.toLowerCase();
+    });
+
+    if (duplicateMateria) {
+      playErrorSound();
+      setDuplicateWarning({
+        isOpen: true,
+        title: '¡La Materia ya se encuentra registrada!',
+        message: '¡El registro ya existe, tienes la opción de mejor modificarlo!',
+        detail: `La materia "${duplicateMateria.nombre}" ya existe en el plan de estudios académico.`,
+        existingRecordSummary: `${duplicateMateria.nombre} • Profesor: ${duplicateMateria.profesor || 'No asignado'} • ${duplicateMateria.creditos} Créditos`,
+        onModify: () => {
+          setDuplicateWarning(null);
+          handleOpenEditMateria(duplicateMateria);
+        }
+      });
+      return;
+    }
 
     const credNum = parseInt(formCreditos, 10) || 6;
     if (editingMateria) {
@@ -882,6 +814,58 @@ export default function App() {
     link.click();
     document.body.removeChild(link);
   };
+
+  const handlePurgeAllSystemData = async () => {
+    if (!window.confirm('⚠️ ATENCIÓN: ¿Está seguro de que desea BORRAR TODOS LOS REGISTROS del sistema (Alumnos, Materias, Calificaciones, Avisos y Usuarios adicionales)?\n\nEl sistema quedará completamente en blanco y solo se conservará la cuenta de Administrador Principal.')) {
+      return;
+    }
+
+    const adminOnly: SystemUser[] = [
+      { 
+        id: '1', 
+        username: 'admin', 
+        password: 'admin123', 
+        name: 'Administrador Principal', 
+        email: 'admin@sysacad.edu', 
+        role: 'Administrador', 
+        status: 'Activo', 
+        fechaRegistro: new Date().toISOString().split('T')[0], 
+        lastAccess: 'Reciente' 
+      }
+    ];
+
+    setAlumnosList([]);
+    setMateriasList([]);
+    setCalificacionesList([]);
+    setAvisosList([]);
+    setSystemUsers(adminOnly);
+
+    localStorage.setItem('sysacad_alumnos_list', JSON.stringify([]));
+    localStorage.setItem('sysacad_materias_list', JSON.stringify([]));
+    localStorage.setItem('sysacad_calificaciones_list', JSON.stringify([]));
+    localStorage.setItem('sysacad_avisos_list', JSON.stringify([]));
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(adminOnly));
+
+    if (token && workspaceResult?.spreadsheetId) {
+      try {
+        await syncAllDataToSheets(token, workspaceResult.spreadsheetId, {
+          studentsList: [],
+          teachersList: [],
+          materiasList: [],
+          calificacionesList: [],
+          controlRecords: [],
+          kardexList: [],
+          systemUsers: adminOnly,
+          avisosList: []
+        });
+        alert('✅ Base de datos limpiada exitosamente y actualizada en Google Sheets.');
+      } catch (err: any) {
+        alert('✅ Base de datos local limpiada. Aviso de Google Sheets: ' + (err.message || 'No sincronizado'));
+      }
+    } else {
+      alert('✅ Todos los registros han sido borrados. El sistema se encuentra 100% limpio únicamente con la cuenta de Administrador.');
+    }
+  };
   const [userRoleFilter, setUserRoleFilter] = useState<string>('todos');
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
@@ -922,6 +906,30 @@ export default function App() {
 
     const finalLogin = formUserLogin.trim() || formUserName.toLowerCase().replace(/\s+/g, '_');
     const finalPassword = formUserPassword.trim() || '123456';
+    const trimmedEmail = formUserEmail.trim().toLowerCase();
+
+    const duplicateUser = systemUsers.find(u => {
+      if (editingUser && u.id === editingUser.id) return false;
+      const matchLogin = u.username.trim().toLowerCase() === finalLogin.toLowerCase();
+      const matchEmail = trimmedEmail && u.email && u.email.trim().toLowerCase() === trimmedEmail;
+      return matchLogin || matchEmail;
+    });
+
+    if (duplicateUser) {
+      playErrorSound();
+      setDuplicateWarning({
+        isOpen: true,
+        title: '¡El Usuario ya existe en el sistema!',
+        message: '¡El registro ya existe, tienes la opción de mejor modificarlo!',
+        detail: `Ya existe una cuenta de usuario con el mismo usuario de acceso ("${duplicateUser.username}") o correo ("${duplicateUser.email}").`,
+        existingRecordSummary: `Usuario: ${duplicateUser.name} (@${duplicateUser.username}) • Rol: ${duplicateUser.role} • Correo: ${duplicateUser.email}`,
+        onModify: () => {
+          setDuplicateWarning(null);
+          handleOpenEditUser(duplicateUser);
+        }
+      });
+      return;
+    }
 
     let updatedList: SystemUser[];
     if (editingUser) {
@@ -1514,7 +1522,7 @@ export default function App() {
         avisosList: avisosList
       };
 
-      const res = await setupSysAcadWorkspace(activeToken, appData);
+      const res = await setupSysAcadWorkspace(activeToken, appData, workspaceResult);
       setWorkspaceResult(res);
       localStorage.setItem('sysacad_workspace_result', JSON.stringify(res));
 
@@ -1601,7 +1609,7 @@ export default function App() {
       const timeout = setTimeout(() => {
         const appData = {
           studentsList: alumnosList,
-          teachersList: systemUsers.filter(u => u.role === 'Docente' || u.role === 'Directivo'),
+          teachersList: systemUsers.filter(u => u.role === 'Docente' || u.role === 'Maestros' || u.role === 'Directivo'),
           materiasList: materiasList,
           calificacionesList: calificacionesList,
           controlRecords: [
@@ -1615,13 +1623,14 @@ export default function App() {
             creditosAcumulados: materiasList.reduce((acc, m) => acc + (m.creditos || 0), 0),
             estatusAcademico: 'Regular'
           })),
-          systemUsers: systemUsers
+          systemUsers: systemUsers,
+          avisosList: avisosList
         };
         syncAllDataToSheets(token, workspaceResult.spreadsheetId, appData).catch(e => console.warn('Auto sync warning:', e));
       }, 1500);
       return () => clearTimeout(timeout);
     }
-  }, [alumnosList, materiasList, calificacionesList, systemUsers, token, workspaceResult?.spreadsheetId]);
+  }, [alumnosList, materiasList, calificacionesList, avisosList, systemUsers, token, workspaceResult?.spreadsheetId]);
 
   const handleAdminEmailChange = (newEmail: string) => {
     const trimmed = newEmail.trim();
@@ -3788,19 +3797,71 @@ export default function App() {
             )}
 
             {adminTab === 'respaldos' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-6">
+                <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
                   <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
                     <Database size={24} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-800">Respaldos y Base de Datos</h3>
-                    <p className="text-xs text-slate-500">Copias de seguridad automáticas en Google Drive y exportaciones</p>
+                    <h3 className="text-lg font-bold text-slate-800">Respaldos y Mantenimiento de Base de Datos</h3>
+                    <p className="text-xs text-slate-500">Copias de seguridad, exportación y limpieza general del sistema</p>
                   </div>
                 </div>
-                <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 text-sm text-slate-600">
-                  <p className="font-medium text-slate-800 mb-1">Almacenamiento Conectado: Google Sheets</p>
-                  <p className="text-xs text-slate-500">Los cambios se sincronizan en tiempo real con tu hoja de cálculo vinculada.</p>
+
+                {/* Status summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Alumnos</p>
+                    <p className="text-2xl font-bold text-slate-800 mt-1">{alumnosList.length}</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Materias</p>
+                    <p className="text-2xl font-bold text-slate-800 mt-1">{materiasList.length}</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Calificaciones</p>
+                    <p className="text-2xl font-bold text-slate-800 mt-1">{calificacionesList.length}</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Usuarios Sistema</p>
+                    <p className="text-2xl font-bold text-slate-800 mt-1">{systemUsers.length}</p>
+                  </div>
+                </div>
+
+                {/* Backup JSON Card */}
+                <div className="p-5 border border-slate-200 rounded-xl bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm">Copia de Seguridad Completa (JSON)</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Descarga una copia completa de toda la información estructurada del sistema escolar.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleDownloadJSONBackup}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                  >
+                    <Download size={16} />
+                    <span>Descargar Respaldo JSON</span>
+                  </button>
+                </div>
+
+                {/* Danger Zone: Purge & Reset Database */}
+                <div className="p-5 border border-red-200 rounded-xl bg-red-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="font-bold text-red-800 text-sm flex items-center gap-2">
+                      <ShieldAlert size={16} /> Limpiar y Vaciar Todos los Registros
+                    </h4>
+                    <p className="text-xs text-red-600/90 mt-0.5 max-w-xl">
+                      Elimina permanentemente todos los alumnos, calificaciones, materias, avisos y usuarios secundarios. El sistema se reiniciará en blanco conservando únicamente la cuenta del <strong>Administrador Principal</strong>.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handlePurgeAllSystemData}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                  >
+                    <Trash2 size={16} />
+                    <span>Vaciar Base de Datos</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -4596,6 +4657,73 @@ export default function App() {
           </div>
         </footer>
       </div>
+
+      {/* Modal Emergente de Integridad de Datos: Registro Duplicado */}
+      {duplicateWarning && duplicateWarning.isOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-amber-300 overflow-hidden text-slate-800">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 p-6 text-white text-center relative">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur-xs rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner ring-4 ring-white/30">
+                <AlertTriangle size={36} className="text-white animate-bounce" />
+              </div>
+              <h3 className="text-xl font-black tracking-tight">{duplicateWarning.title || '¡El Registro ya Existe!'}</h3>
+              <p className="text-amber-100 text-xs font-semibold mt-1 uppercase tracking-wider">
+                Control de Integridad y Duplicidad de Datos
+              </p>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-center">
+                <p className="text-base font-extrabold text-amber-950 leading-snug">
+                  {duplicateWarning.message}
+                </p>
+                {duplicateWarning.detail && (
+                  <p className="text-xs text-amber-900 mt-2 font-medium">
+                    {duplicateWarning.detail}
+                  </p>
+                )}
+              </div>
+
+              {duplicateWarning.existingRecordSummary && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+                    <ShieldCheck size={14} className="text-emerald-600" />
+                    <span>Registro Existente Encontrado:</span>
+                  </div>
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs">
+                    {duplicateWarning.existingRecordSummary}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                {duplicateWarning.onModify && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      duplicateWarning.onModify?.();
+                    }}
+                    className="w-full sm:flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-md cursor-pointer text-sm flex items-center justify-center gap-2"
+                  >
+                    <Edit3 size={18} />
+                    <span>Modificar Registro Existente</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDuplicateWarning(null)}
+                  className="w-full sm:w-auto px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition-all text-sm cursor-pointer"
+                >
+                  Entendido / Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Aviso: Solo Cuentas de Google */}
       {showNonGoogleEmailModal && (

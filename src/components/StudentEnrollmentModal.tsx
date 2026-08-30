@@ -86,7 +86,7 @@ export interface StudentFormData {
 interface StudentEnrollmentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: StudentFormData) => void;
+  onSave: (data: StudentFormData) => boolean | void;
   initialData?: StudentFormData | null;
   institutionName?: string;
   cicloEscolar?: string;
@@ -258,11 +258,13 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
       return;
     }
 
-    onSave({
+    const res = onSave({
       ...formData,
       fechaInscripcion: formData.fechaInscripcion || new Date().toISOString().split('T')[0]
     });
-    onClose();
+    if (res !== false) {
+      onClose();
+    }
   };
 
   if (!isOpen) return null;
