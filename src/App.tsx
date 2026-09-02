@@ -245,6 +245,8 @@ export default function App() {
   });
   const [califSearchQuery, setCalifSearchQuery] = useState('');
   const [isCalifModalOpen, setIsCalifModalOpen] = useState(false);
+  const [califModalInitialTab, setCalifModalInitialTab] = useState<'manual' | 'rapida'>('manual');
+  const [califModalInitialQuickMode, setCalifModalInitialQuickMode] = useState<'excel' | 'imagen'>('excel');
   const [editingCalif, setEditingCalif] = useState<CalificacionItem | null>(null);
   const [formCalifAlumno, setFormCalifAlumno] = useState('');
   const [formCalifMateria, setFormCalifMateria] = useState('');
@@ -258,6 +260,8 @@ export default function App() {
 
   const handleOpenCreateCalif = () => {
     setEditingCalif(null);
+    setCalifModalInitialTab('manual');
+    setCalifModalInitialQuickMode('excel');
     setFormCalifAlumno(alumnosList[0] ? `${alumnosList[0].nombres} ${alumnosList[0].apellidos}` : '');
     setFormCalifMateria(materiasList[0] ? materiasList[0].nombre : '');
     setFormCalifParcial('Primer Parcial');
@@ -265,8 +269,16 @@ export default function App() {
     setIsCalifModalOpen(true);
   };
 
+  const handleOpenQuickCapture = (mode: 'excel' | 'imagen') => {
+    setEditingCalif(null);
+    setCalifModalInitialTab('rapida');
+    setCalifModalInitialQuickMode(mode);
+    setIsCalifModalOpen(true);
+  };
+
   const handleOpenEditCalif = (item: CalificacionItem) => {
     setEditingCalif(item);
+    setCalifModalInitialTab('manual');
     setFormCalifAlumno(item.alumno);
     setFormCalifMateria(item.materia);
     setFormCalifParcial(item.parcial);
@@ -2626,45 +2638,16 @@ export default function App() {
                             <Loader2 size={13} className="animate-spin text-blue-600" />
                             <span>Creando en Drive...</span>
                           </span>
-                        ) : item.folderUrl || (item.estatus === 'Activo' && (workspaceResult?.cycleFolderUrl || localStorage.getItem('sysacad_cycle_folder_link'))) ? (
-                          <a 
-                            href={item.folderUrl || workspaceResult?.cycleFolderUrl || localStorage.getItem('sysacad_cycle_folder_link')!} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline bg-blue-50/60 px-2.5 py-1 rounded-lg border border-blue-100"
-                            title="Abrir carpeta del ciclo en Google Drive"
-                          >
-                            <Folder size={14} className="text-blue-500" />
-                            <span>Carpeta en Drive</span>
-                            <ExternalLink size={11} />
-                          </a>
                         ) : (
-                          <button
-                            onClick={() => handleSyncCycleToDrive(item)}
-                            className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 bg-indigo-50/80 hover:bg-indigo-100/80 px-2.5 py-1 rounded-lg border border-indigo-200 transition-colors cursor-pointer"
-                            title="Generar carpeta y subcarpetas en Google Drive"
-                          >
-                            <RefreshCw size={12} className="text-indigo-500" />
-                            <span>Crear en Drive</span>
-                          </button>
+                          <span className="text-xs text-slate-700 font-medium">
+                            Carpeta en Drive
+                          </span>
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        {item.spreadsheetUrl || (item.estatus === 'Activo' && sheetLink) ? (
-                          <a 
-                            href={item.spreadsheetUrl || sheetLink!} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-emerald-700 hover:text-emerald-900 font-medium hover:underline bg-emerald-50/70 px-2.5 py-1 rounded-lg border border-emerald-200"
-                            title="Abrir base de datos de Google Sheets de este ciclo"
-                          >
-                            <FileSpreadsheet size={14} className="text-emerald-600" />
-                            <span>Hoja Sheets</span>
-                            <ExternalLink size={11} />
-                          </a>
-                        ) : (
-                          <span className="text-xs text-slate-400">Automática en Drive</span>
-                        )}
+                        <span className="text-xs text-slate-700 font-medium">
+                          Hoja Sheets
+                        </span>
                       </td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
@@ -3517,10 +3500,29 @@ export default function App() {
                   <p className="text-xs text-slate-500">Registro oficial de calificaciones por alumno, materia y período</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button 
+                  type="button"
+                  onClick={() => handleOpenQuickCapture('imagen')}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Escanear acta o lista física con IA y extraer calificaciones automáticamente"
+                >
+                  <Sparkles size={17} className="text-amber-300" />
+                  <span>Escanear con IA (Foto)</span>
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => handleOpenQuickCapture('excel')}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Importar calificaciones masivas desde hoja de Excel"
+                >
+                  <FileSpreadsheet size={17} />
+                  <span>Subir Excel</span>
+                </button>
+                <button 
+                  type="button"
                   onClick={handleOpenCreateCalif}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
                   <Plus size={18} />
                   <span>Nueva Calificación</span>
@@ -3609,6 +3611,8 @@ export default function App() {
               editingCalif={editingCalif}
               alumnosList={alumnosList}
               materiasList={materiasList}
+              initialTab={califModalInitialTab}
+              initialQuickMode={califModalInitialQuickMode}
               onSaveManual={handleSaveManualCalif}
               onSaveBatch={handleSaveBatchCalif}
               playClickSound={playClickSound}

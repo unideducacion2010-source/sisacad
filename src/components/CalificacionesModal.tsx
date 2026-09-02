@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Edit3, 
   UploadCloud, 
@@ -51,6 +51,8 @@ interface CalificacionesModalProps {
   editingCalif: CalificacionItem | null;
   alumnosList: AlumnoItem[];
   materiasList: MateriaItem[];
+  initialTab?: 'manual' | 'rapida';
+  initialQuickMode?: 'excel' | 'imagen';
   onSaveManual: (calif: {
     alumno: string;
     materia: string;
@@ -69,6 +71,8 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
   editingCalif,
   alumnosList,
   materiasList,
+  initialTab = 'manual',
+  initialQuickMode = 'excel',
   onSaveManual,
   onSaveBatch,
   playClickSound,
@@ -76,10 +80,10 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
   playErrorSound,
 }) => {
   // Main Tab State: 'manual' vs 'rapida'
-  const [activeTab, setActiveTab] = useState<'manual' | 'rapida'>('manual');
+  const [activeTab, setActiveTab] = useState<'manual' | 'rapida'>(initialTab);
   
   // Quick Capture Sub-mode: 'excel' vs 'imagen'
-  const [quickMode, setQuickMode] = useState<'excel' | 'imagen'>('excel');
+  const [quickMode, setQuickMode] = useState<'excel' | 'imagen'>(initialQuickMode);
 
   // Manual Form States
   const [formAlumno, setFormAlumno] = useState(
@@ -130,6 +134,17 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
     errorMsg?: string;
   }>>([]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (editingCalif) {
+        setActiveTab('manual');
+      } else {
+        if (initialTab) setActiveTab(initialTab);
+        if (initialQuickMode) setQuickMode(initialQuickMode);
+      }
+    }
+  }, [isOpen, editingCalif, initialTab, initialQuickMode]);
 
   // Clean-up and close handler
   const handleModalClose = () => {
