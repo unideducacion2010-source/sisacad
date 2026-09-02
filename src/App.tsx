@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, GripVertical, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets } from './google-api';
+import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId } from './auth';
 import { playClickSound, playNavigateSound, playLoginSuccessSound, playLogoutSound, playSuccessSound, playErrorSound, playDeleteSound, isSoundMuted, toggleSoundMute } from './soundEffects';
 import { StudentEnrollmentModal, StudentFormData } from './components/StudentEnrollmentModal';
+import { InformesGeneralModal } from './components/InformesGeneralModal';
 import { User } from 'firebase/auth';
 
 export interface AppUser {
@@ -185,9 +186,30 @@ export default function App() {
 
   interface MateriaItem {
     id: string;
+    clave?: string;
     nombre: string;
     profesor: string;
     creditos: number;
+    area?: string;
+    estatus?: string;
+  }
+
+  interface CicloEscolarItem {
+    id: string;
+    clave: string;
+    nombre: string;
+    periodo: string;
+    fechaInicio?: string;
+    fechaFin?: string;
+    estatus: 'Activo' | 'Próximo' | 'Concluido';
+    folderId?: string;
+    folderUrl?: string;
+    spreadsheetId?: string;
+    spreadsheetUrl?: string;
+    subfolders?: { name: string; id: string; url: string }[];
+    totalAlumnos?: number;
+    observaciones?: string;
+    fechaCreacion?: string;
   }
 
   interface AvisoItem {
@@ -633,23 +655,29 @@ export default function App() {
   const [materiaSearchQuery, setMateriaSearchQuery] = useState('');
   const [isMateriaModalOpen, setIsMateriaModalOpen] = useState(false);
   const [editingMateria, setEditingMateria] = useState<MateriaItem | null>(null);
+  const [formClaveMateria, setFormClaveMateria] = useState('');
   const [formNombreMateria, setFormNombreMateria] = useState('');
   const [formProfesor, setFormProfesor] = useState('');
   const [formCreditos, setFormCreditos] = useState('6');
+  const [formAreaMateria, setFormAreaMateria] = useState('Ciencias Exactas');
 
   const handleOpenCreateMateria = () => {
     setEditingMateria(null);
+    setFormClaveMateria(`MAT-${Math.floor(100 + Math.random() * 900)}`);
     setFormNombreMateria('');
     setFormProfesor('');
     setFormCreditos('6');
+    setFormAreaMateria('Ciencias Exactas');
     setIsMateriaModalOpen(true);
   };
 
   const handleOpenEditMateria = (item: MateriaItem) => {
     setEditingMateria(item);
+    setFormClaveMateria(item.clave || `MAT-${item.id.slice(-3)}`);
     setFormNombreMateria(item.nombre);
     setFormProfesor(item.profesor);
     setFormCreditos(item.creditos.toString());
+    setFormAreaMateria(item.area || 'Ciencias Exactas');
     setIsMateriaModalOpen(true);
   };
 
@@ -683,16 +711,22 @@ export default function App() {
     if (editingMateria) {
       updateMaterias(materiasList.map(m => m.id === editingMateria.id ? {
         ...m,
+        clave: formClaveMateria || m.clave || `MAT-${m.id.slice(-3)}`,
         nombre: formNombreMateria,
         profesor: formProfesor,
-        creditos: credNum
+        creditos: credNum,
+        area: formAreaMateria,
+        estatus: 'Activa'
       } : m));
     } else {
       const newItem: MateriaItem = {
         id: Date.now().toString(),
+        clave: formClaveMateria || `MAT-${Math.floor(100 + Math.random() * 900)}`,
         nombre: formNombreMateria,
         profesor: formProfesor,
-        creditos: credNum
+        creditos: credNum,
+        area: formAreaMateria,
+        estatus: 'Activa'
       };
       updateMaterias([newItem, ...materiasList]);
     }
@@ -702,6 +736,527 @@ export default function App() {
   const handleDeleteMateria = (id: string) => {
     if (confirm('¿Estás seguro de eliminar esta materia del plan y de la hoja de Google Sheets?')) {
       updateMaterias(materiasList.filter(m => m.id !== id));
+    }
+  };
+
+  const exportMateriasToCSV = () => {
+    const headers = ['Clave / ID', 'Nombre de Materia', 'Profesor Asignado', 'Créditos Académicos', 'Área / Nivel', 'Estatus'];
+    const csvRows = [headers.join(',')];
+    
+    materiasList.forEach(materia => {
+      const row = [
+        `"${materia.clave || `MAT-${materia.id.slice(-4)}`}"`,
+        `"${materia.nombre.replace(/"/g, '""')}"`,
+        `"${(materia.profesor || 'Sin asignar').replace(/"/g, '""')}"`,
+        `"${materia.creditos}"`,
+        `"${(materia.area || 'Tronco Común').replace(/"/g, '""')}"`,
+        `"${materia.estatus || 'Activa'}"`
+      ];
+      csvRows.push(row.join(','));
+    });
+    
+    const csvContent = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `materias_plan_estudios_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Maestros Submenu State & Handlers
+  const [maestroSearchQuery, setMaestroSearchQuery] = useState('');
+  const [isMaestroModalOpen, setIsMaestroModalOpen] = useState(false);
+  const [editingMaestro, setEditingMaestro] = useState<SystemUser | null>(null);
+  const [formMaestroName, setFormMaestroName] = useState('');
+  const [formMaestroLogin, setFormMaestroLogin] = useState('');
+  const [formMaestroPassword, setFormMaestroPassword] = useState('');
+  const [formMaestroEmail, setFormMaestroEmail] = useState('');
+  const [formMaestroRole, setFormMaestroRole] = useState<'Maestros' | 'Docente' | 'Directivo'>('Docente');
+  const [formMaestroStatus, setFormMaestroStatus] = useState<'Activo' | 'Inactivo'>('Activo');
+
+  const handleOpenCreateMaestro = () => {
+    setEditingMaestro(null);
+    setFormMaestroName('');
+    setFormMaestroLogin('');
+    setFormMaestroPassword('');
+    setFormMaestroEmail('');
+    setFormMaestroRole('Docente');
+    setFormMaestroStatus('Activo');
+    setIsMaestroModalOpen(true);
+  };
+
+  const handleOpenEditMaestro = (teacher: SystemUser) => {
+    setEditingMaestro(teacher);
+    setFormMaestroName(teacher.name);
+    setFormMaestroLogin(teacher.username || '');
+    setFormMaestroPassword(teacher.password || '');
+    setFormMaestroEmail(teacher.email);
+    setFormMaestroRole((teacher.role === 'Maestros' || teacher.role === 'Directivo' ? teacher.role : 'Docente') as any);
+    setFormMaestroStatus(teacher.status);
+    setIsMaestroModalOpen(true);
+  };
+
+  const handleSaveMaestro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formMaestroName.trim()) return;
+
+    const finalLogin = formMaestroLogin.trim() || formMaestroName.toLowerCase().replace(/\s+/g, '_');
+    const finalPassword = formMaestroPassword.trim() || '123456';
+    const trimmedEmail = formMaestroEmail.trim().toLowerCase();
+
+    const duplicateTeacher = systemUsers.find(u => {
+      if (editingMaestro && u.id === editingMaestro.id) return false;
+      const matchLogin = u.username.trim().toLowerCase() === finalLogin.toLowerCase();
+      const matchEmail = trimmedEmail && u.email && u.email.trim().toLowerCase() === trimmedEmail;
+      const matchName = u.name.trim().toLowerCase() === formMaestroName.trim().toLowerCase();
+      return matchLogin || matchEmail || matchName;
+    });
+
+    if (duplicateTeacher) {
+      playErrorSound();
+      setDuplicateWarning({
+        isOpen: true,
+        title: '¡El Maestro / Docente ya existe en el sistema!',
+        message: '¡El registro ya existe, tienes la opción de mejor modificarlo!',
+        detail: `Ya existe un maestro o usuario con el mismo nombre ("${duplicateTeacher.name}"), usuario ("${duplicateTeacher.username}") o correo ("${duplicateTeacher.email}").`,
+        existingRecordSummary: `Docente: ${duplicateTeacher.name} • Rol: ${duplicateTeacher.role} • Correo: ${duplicateTeacher.email}`,
+        onModify: () => {
+          setDuplicateWarning(null);
+          setIsMaestroModalOpen(false);
+          setTimeout(() => {
+            handleOpenEditMaestro(duplicateTeacher);
+          }, 100);
+        }
+      });
+      return;
+    }
+
+    let updatedList: SystemUser[];
+    if (editingMaestro) {
+      updatedList = systemUsers.map(u => u.id === editingMaestro.id ? {
+        ...u,
+        name: formMaestroName.trim(),
+        username: finalLogin,
+        password: finalPassword,
+        email: formMaestroEmail.trim(),
+        role: formMaestroRole,
+        status: formMaestroStatus
+      } : u);
+    } else {
+      const newTeacher: SystemUser = {
+        id: Date.now().toString(),
+        name: formMaestroName.trim(),
+        username: finalLogin,
+        password: finalPassword,
+        email: formMaestroEmail.trim(),
+        role: formMaestroRole,
+        status: formMaestroStatus,
+        fechaRegistro: new Date().toISOString().split('T')[0],
+        lastAccess: 'Nunca'
+      };
+      updatedList = [newTeacher, ...systemUsers];
+    }
+
+    setSystemUsers(updatedList);
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedList));
+    setIsMaestroModalOpen(false);
+
+    if (token && workspaceResult?.spreadsheetId) {
+      try {
+        await syncUsersToSheet(token, workspaceResult.spreadsheetId, updatedList);
+      } catch (err) {
+        console.warn('Could not auto-sync teachers to sheet:', err);
+      }
+    }
+  };
+
+  const handleDeleteMaestro = (id: string) => {
+    if (confirm('¿Está seguro de eliminar este maestro de la plantilla docente?')) {
+      const updated = systemUsers.filter(u => u.id !== id);
+      setSystemUsers(updated);
+      localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
+      if (token && workspaceResult?.spreadsheetId) {
+        syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
+      }
+    }
+  };
+
+  const exportMaestrosToCSV = () => {
+    const teachers = systemUsers.filter(u => u.role === 'Maestros' || u.role === 'Docente' || u.role === 'Directivo');
+    const headers = ['ID / Clave', 'Nombre Completo', 'Usuario de Acceso', 'Rol / Categoría', 'Correo Institucional', 'Estatus', 'Último Acceso'];
+    const csvRows = [headers.join(',')];
+    
+    teachers.forEach(teacher => {
+      const row = [
+        `"DOC-${teacher.id.slice(-4)}"`,
+        `"${teacher.name.replace(/"/g, '""')}"`,
+        `"${(teacher.username || '').replace(/"/g, '""')}"`,
+        `"${teacher.role.replace(/"/g, '""')}"`,
+        `"${teacher.email.replace(/"/g, '""')}"`,
+        `"${teacher.status}"`,
+        `"${teacher.lastAccess || 'Reciente'}"`
+      ];
+      csvRows.push(row.join(','));
+    });
+    
+    const csvContent = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `plantilla_maestros_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Ciclos Escolares State & Handlers
+  const [ciclosList, setCiclosList] = useState<CicloEscolarItem[]>(() => {
+    const saved = localStorage.getItem('sysacad_ciclos_list');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    const defaultCycles: CicloEscolarItem[] = [
+      {
+        id: 'c-2026-2027',
+        clave: 'CICLO-2026-2027',
+        nombre: 'CICLO ESCOLAR 2026 - 2027',
+        periodo: 'Agosto 2026 - Julio 2027',
+        fechaInicio: '2026-08-15',
+        fechaFin: '2027-07-15',
+        estatus: 'Activo',
+        observaciones: 'Ciclo escolar principal en curso',
+        fechaCreacion: new Date().toISOString().split('T')[0]
+      }
+    ];
+    localStorage.setItem('sysacad_ciclos_list', JSON.stringify(defaultCycles));
+    return defaultCycles;
+  });
+
+  const updateCiclos = (newList: CicloEscolarItem[]) => {
+    setCiclosList(newList);
+    localStorage.setItem('sysacad_ciclos_list', JSON.stringify(newList));
+  };
+
+  const [cicloSearchQuery, setCicloSearchQuery] = useState('');
+  const [isCicloModalOpen, setIsCicloModalOpen] = useState(false);
+  const [editingCiclo, setEditingCiclo] = useState<CicloEscolarItem | null>(null);
+  const [formCicloClave, setFormCicloClave] = useState('');
+  const [formCicloNombre, setFormCicloNombre] = useState('');
+  const [formCicloPeriodo, setFormCicloPeriodo] = useState('');
+  const [formCicloFechaInicio, setFormCicloFechaInicio] = useState('');
+  const [formCicloFechaFin, setFormCicloFechaFin] = useState('');
+  const [formCicloEstatus, setFormCicloEstatus] = useState<'Activo' | 'Próximo' | 'Concluido'>('Activo');
+  const [formCicloObservaciones, setFormCicloObservaciones] = useState('');
+  const [syncingCycleId, setSyncingCycleId] = useState<string | null>(null);
+
+  // State & Handlers for Informe General de Actividades modal
+  const [isInformeGeneralModalOpen, setIsInformeGeneralModalOpen] = useState(false);
+  const [informeTab, setInformeTab] = useState<'ciclo' | 'docentes' | 'alumnos'>('ciclo');
+  const [informeSearchQuery, setInformeSearchQuery] = useState('');
+
+  const exportInformeGeneralToCSV = () => {
+    let csvContent = '\uFEFF';
+    const sanitize = (text: any) => `"${String(text || '').replace(/"/g, '""')}"`;
+
+    if (informeTab === 'ciclo') {
+      const headers = ['Clave', 'Ciclo Escolar', 'Periodo Académico', 'Fecha Inicio', 'Fecha Fin', 'Estatus', 'Total Alumnos', 'Observaciones'];
+      csvContent += headers.join(',') + '\n';
+      ciclosList.forEach(c => {
+        csvContent += [
+          sanitize(c.clave),
+          sanitize(c.nombre),
+          sanitize(c.periodo),
+          sanitize(c.fechaInicio),
+          sanitize(c.fechaFin),
+          sanitize(c.estatus),
+          sanitize(alumnosList.length),
+          sanitize(c.observaciones)
+        ].join(',') + '\n';
+      });
+    } else if (informeTab === 'docentes') {
+      const teachers = systemUsers.filter(u => u.role === 'Maestros' || u.role === 'Docente' || u.role === 'Directivo');
+      const headers = ['ID / Cédula', 'Nombre Completo', 'Usuario', 'Correo Institucional', 'Rol / Categoría', 'Estatus', 'Materias Asignadas'];
+      csvContent += headers.join(',') + '\n';
+      teachers.forEach(t => {
+        const assigned = materiasList.filter(m => m.profesor?.toLowerCase().includes(t.name.toLowerCase())).map(m => m.nombre).join('; ');
+        csvContent += [
+          sanitize(`DOC-${t.id.slice(-4)}`),
+          sanitize(t.name),
+          sanitize(t.username),
+          sanitize(t.email),
+          sanitize(t.role),
+          sanitize(t.status),
+          sanitize(assigned || 'Sin asignación')
+        ].join(',') + '\n';
+      });
+    } else {
+      const headers = ['Matrícula', 'Nombre Completo', 'CURP', 'Nivel', 'Grado', 'Grupo', 'Turno', 'Email', 'Promedio General', 'Estatus'];
+      csvContent += headers.join(',') + '\n';
+      alumnosList.forEach(a => {
+        csvContent += [
+          sanitize(a.matricula || a.id),
+          sanitize(`${a.nombres} ${a.apellidos}`),
+          sanitize(a.curp),
+          sanitize(a.nivel || 'Primaria'),
+          sanitize(a.grado),
+          sanitize(a.grupo || 'A'),
+          sanitize(a.turno || 'Matutino'),
+          sanitize(a.email),
+          sanitize(a.promedio || '9.2'),
+          sanitize(a.estatus || 'Activo')
+        ].join(',') + '\n';
+      });
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `informe_general_${informeTab}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    playSuccessSound();
+  };
+
+  const handleOpenCreateCiclo = () => {
+    setEditingCiclo(null);
+    const nextYearStart = 2026 + ciclosList.length;
+    const nextYearEnd = nextYearStart + 1;
+    setFormCicloClave(`CICLO-${nextYearStart}-${nextYearEnd}`);
+    setFormCicloNombre(`CICLO ESCOLAR ${nextYearStart} - ${nextYearEnd}`);
+    setFormCicloPeriodo(`Agosto ${nextYearStart} - Julio ${nextYearEnd}`);
+    setFormCicloFechaInicio(`${nextYearStart}-08-15`);
+    setFormCicloFechaFin(`${nextYearEnd}-07-15`);
+    setFormCicloEstatus(ciclosList.length === 0 ? 'Activo' : 'Próximo');
+    setFormCicloObservaciones('');
+    setIsCicloModalOpen(true);
+  };
+
+  const handleOpenEditCiclo = (item: CicloEscolarItem) => {
+    setEditingCiclo(item);
+    setFormCicloClave(item.clave);
+    setFormCicloNombre(item.nombre);
+    setFormCicloPeriodo(item.periodo);
+    setFormCicloFechaInicio(item.fechaInicio || '');
+    setFormCicloFechaFin(item.fechaFin || '');
+    setFormCicloEstatus(item.estatus);
+    setFormCicloObservaciones(item.observaciones || '');
+    setIsCicloModalOpen(true);
+  };
+
+  const handleSyncCycleToDrive = async (item: CicloEscolarItem) => {
+    if (!token) {
+      alert('Para crear y sincronizar la carpeta y hojas en Google Drive, primero inicia sesión y vincula Google Workspace en el menú de Administrador.');
+      return;
+    }
+    setSyncingCycleId(item.id);
+    try {
+      const appData = {
+        activeCycleName: item.nombre,
+        studentsList: alumnosList,
+        teachersList: systemUsers.filter(u => u.role === 'Docente' || u.role === 'Maestros' || u.role === 'Directivo'),
+        materiasList: materiasList,
+        ciclosList: ciclosList,
+        calificacionesList: calificacionesList,
+        controlRecords: [
+          { id: '1', cicloEscolar: item.nombre, periodo: item.periodo, turno: 'Matutino', inscritos: alumnosList.length, estatus: item.estatus }
+        ],
+        kardexList: alumnosList.map(a => ({
+          id: a.id,
+          alumno: `${a.nombres} ${a.apellidos}`,
+          promedio: a.promedio || 9.2,
+          cursadas: materiasList.length,
+          creditos: materiasList.reduce((acc, m) => acc + (m.creditos || 6), 0),
+          estatus: 'Regular'
+        })),
+        systemUsers: systemUsers,
+        avisosList: avisosList
+      };
+
+      const result = await setupSpecificCycleInDrive(token, item.nombre, workspaceResult?.rootFolderId, appData);
+      
+      const updated = ciclosList.map(c => {
+        if (c.id === item.id) {
+          return {
+            ...c,
+            folderId: result.cycleFolderId,
+            folderUrl: result.cycleFolderUrl,
+            spreadsheetId: result.spreadsheetId,
+            spreadsheetUrl: result.spreadsheetUrl,
+            subfolders: result.subfolders
+          };
+        }
+        return c;
+      });
+
+      updateCiclos(updated);
+      if (item.estatus === 'Activo') {
+        localStorage.setItem('sysacad_cycle_folder_link', result.cycleFolderUrl);
+      }
+      playSuccessSound();
+    } catch (err: any) {
+      console.error('Error al sincronizar ciclo en Drive:', err);
+      playErrorSound();
+      alert('Ocurrió un detalle al sincronizar la carpeta en Drive: ' + (err.message || err));
+    } finally {
+      setSyncingCycleId(null);
+    }
+  };
+
+  const handleSaveCiclo = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedNombre = formCicloNombre.trim().toUpperCase();
+    const trimmedClave = formCicloClave.trim().toUpperCase();
+    if (!trimmedNombre) return;
+
+    const duplicateCiclo = ciclosList.find(c => {
+      if (editingCiclo && c.id === editingCiclo.id) return false;
+      return c.nombre.trim().toUpperCase() === trimmedNombre || 
+             (trimmedClave && c.clave && c.clave.trim().toUpperCase() === trimmedClave);
+    });
+
+    if (duplicateCiclo) {
+      playErrorSound();
+      setDuplicateWarning({
+        isOpen: true,
+        title: '¡El Ciclo Escolar ya se encuentra registrado!',
+        message: '¡El registro ya existe, tienes la opción de mejor modificarlo!',
+        detail: `Ya existe un ciclo escolar registrado con el nombre "${duplicateCiclo.nombre}".`,
+        existingRecordSummary: `${duplicateCiclo.nombre} • ${duplicateCiclo.periodo} • Estatus: ${duplicateCiclo.estatus}`,
+        onModify: () => {
+          setDuplicateWarning(null);
+          handleOpenEditCiclo(duplicateCiclo);
+        }
+      });
+      return;
+    }
+
+    let updatedList: CicloEscolarItem[];
+    if (editingCiclo) {
+      updatedList = ciclosList.map(c => {
+        if (c.id === editingCiclo.id) {
+          return {
+            ...c,
+            clave: trimmedClave || c.clave,
+            nombre: trimmedNombre,
+            periodo: formCicloPeriodo.trim() || c.periodo,
+            fechaInicio: formCicloFechaInicio,
+            fechaFin: formCicloFechaFin,
+            estatus: formCicloEstatus,
+            observaciones: formCicloObservaciones.trim()
+          };
+        }
+        if (formCicloEstatus === 'Activo' && c.estatus === 'Activo') {
+          return { ...c, estatus: 'Concluido' as const };
+        }
+        return c;
+      });
+    } else {
+      const existingAdjusted = formCicloEstatus === 'Activo'
+        ? ciclosList.map(c => c.estatus === 'Activo' ? { ...c, estatus: 'Concluido' as const } : c)
+        : ciclosList;
+
+      const newCiclo: CicloEscolarItem = {
+        id: `c-${Date.now()}`,
+        clave: trimmedClave || `CICLO-${Date.now().toString().slice(-4)}`,
+        nombre: trimmedNombre,
+        periodo: formCicloPeriodo.trim() || 'Periodo Anual',
+        fechaInicio: formCicloFechaInicio,
+        fechaFin: formCicloFechaFin,
+        estatus: formCicloEstatus,
+        observaciones: formCicloObservaciones.trim(),
+        fechaCreacion: new Date().toISOString().split('T')[0]
+      };
+      updatedList = [newCiclo, ...existingAdjusted];
+
+      // Automatically create folder, copy all subfolders & spreadsheet in Google Drive if connected
+      if (token) {
+        setSyncingCycleId(newCiclo.id);
+        (async () => {
+          try {
+            const appData = {
+              activeCycleName: trimmedNombre,
+              studentsList: alumnosList,
+              teachersList: systemUsers.filter(u => u.role === 'Docente' || u.role === 'Maestros' || u.role === 'Directivo'),
+              materiasList: materiasList,
+              ciclosList: updatedList,
+              calificacionesList: calificacionesList,
+              controlRecords: [
+                { id: '1', cicloEscolar: trimmedNombre, periodo: formCicloPeriodo.trim(), turno: 'Matutino', inscritos: alumnosList.length, estatus: formCicloEstatus }
+              ],
+              kardexList: alumnosList.map(a => ({
+                id: a.id,
+                alumno: `${a.nombres} ${a.apellidos}`,
+                promedio: a.promedio || 9.2,
+                cursadas: materiasList.length,
+                creditos: materiasList.reduce((acc, m) => acc + (m.creditos || 6), 0),
+                estatus: 'Regular'
+              })),
+              systemUsers: systemUsers,
+              avisosList: avisosList
+            };
+
+            const driveRes = await setupSpecificCycleInDrive(token, trimmedNombre, workspaceResult?.rootFolderId, appData);
+            
+            setCiclosList(prev => {
+              const listWithDrive = prev.map(c => c.id === newCiclo.id ? {
+                ...c,
+                folderId: driveRes.cycleFolderId,
+                folderUrl: driveRes.cycleFolderUrl,
+                spreadsheetId: driveRes.spreadsheetId,
+                spreadsheetUrl: driveRes.spreadsheetUrl,
+                subfolders: driveRes.subfolders
+              } : c);
+              localStorage.setItem('sysacad_ciclos_list', JSON.stringify(listWithDrive));
+              return listWithDrive;
+            });
+
+            if (formCicloEstatus === 'Activo') {
+              localStorage.setItem('sysacad_cycle_folder_link', driveRes.cycleFolderUrl);
+            }
+          } catch (e) {
+            console.warn('Auto drive setup for cycle warning:', e);
+          } finally {
+            setSyncingCycleId(null);
+          }
+        })();
+      }
+    }
+
+    updateCiclos(updatedList);
+    setIsCicloModalOpen(false);
+    playSuccessSound();
+  };
+
+  const handleSetActiveCiclo = (id: string) => {
+    const updated = ciclosList.map(c => ({
+      ...c,
+      estatus: c.id === id ? ('Activo' as const) : c.estatus === 'Activo' ? ('Concluido' as const) : c.estatus
+    }));
+    updateCiclos(updated);
+    playSuccessSound();
+  };
+
+  const handleDeleteCiclo = (id: string) => {
+    if (ciclosList.length <= 1) {
+      alert('Debe existir al menos un ciclo escolar en el sistema.');
+      return;
+    }
+    if (confirm('¿Está seguro de eliminar este ciclo escolar?')) {
+      const updated = ciclosList.filter(c => c.id !== id);
+      if (!updated.some(c => c.estatus === 'Activo') && updated.length > 0) {
+        updated[0].estatus = 'Activo';
+      }
+      updateCiclos(updated);
+      playDeleteSound();
     }
   };
 
@@ -1327,7 +1882,7 @@ export default function App() {
     const role = sessionUser.role;
     if (role === 'Administrador') return true;
     if (role === 'Control Escolar') {
-      return ['control-escolar', 'alumnos', 'personal-usuarios', 'materias', 'reportes', 'kardex-alumnos', 'maestros', 'avisos'].includes(menuId);
+      return ['control-escolar', 'alumnos', 'ciclo-escolar', 'personal-usuarios', 'materias', 'reportes', 'kardex-alumnos', 'maestros', 'avisos'].includes(menuId);
     }
     if (role === 'Maestros' || role === 'Docente') {
       return ['maestros', 'calificaciones', 'kardex-alumnos', 'avisos'].includes(menuId);
@@ -1502,13 +2057,18 @@ export default function App() {
     setWorkspaceSyncStatus('Creando la carpeta principal en Drive y hojas en Sheets para todos los menús...');
 
     try {
+      const activeCycle = ciclosList.find(c => c.estatus === 'Activo') || ciclosList[0];
+      const activeCycleName = activeCycle ? activeCycle.nombre : 'CICLO ESCOLAR 2026 - 2027';
+
       const appData = {
+        activeCycleName: activeCycleName,
         studentsList: alumnosList,
         teachersList: systemUsers.filter(u => u.role === 'Docente' || u.role === 'Maestros' || u.role === 'Directivo'),
         materiasList: materiasList,
+        ciclosList: ciclosList,
         calificacionesList: calificacionesList,
         controlRecords: [
-          { id: '1', cicloEscolar: '2026-1', periodo: 'Enero - Junio 2026', turno: 'Matutino', inscritos: alumnosList.length, estatus: 'Activo' }
+          { id: '1', cicloEscolar: activeCycleName, periodo: activeCycle ? activeCycle.periodo : 'Agosto 2026 - Julio 2027', turno: 'Matutino', inscritos: alumnosList.length, estatus: 'Activo' }
         ],
         kardexList: alumnosList.map(a => ({
           id: a.id,
@@ -1525,6 +2085,17 @@ export default function App() {
       const res = await setupSysAcadWorkspace(activeToken, appData, workspaceResult);
       setWorkspaceResult(res);
       localStorage.setItem('sysacad_workspace_result', JSON.stringify(res));
+
+      // Update active cycle with folderId and folderUrl if returned
+      if (res.cycleFolderUrl) {
+        const updatedWithFolder = ciclosList.map(c => 
+          c.nombre.trim().toUpperCase() === activeCycleName.trim().toUpperCase()
+            ? { ...c, folderId: res.cycleFolderId, folderUrl: res.cycleFolderUrl }
+            : c
+        );
+        updateCiclos(updatedWithFolder);
+        localStorage.setItem('sysacad_cycle_folder_link', res.cycleFolderUrl);
+      }
 
       setFolderLink(res.rootFolderUrl);
       setSheetLink(res.spreadsheetUrl);
@@ -1607,13 +2178,18 @@ export default function App() {
   useEffect(() => {
     if (token && workspaceResult?.spreadsheetId) {
       const timeout = setTimeout(() => {
+        const activeCycle = ciclosList.find(c => c.estatus === 'Activo') || ciclosList[0];
+        const activeCycleName = activeCycle ? activeCycle.nombre : 'CICLO ESCOLAR 2026 - 2027';
+
         const appData = {
+          activeCycleName: activeCycleName,
           studentsList: alumnosList,
           teachersList: systemUsers.filter(u => u.role === 'Docente' || u.role === 'Maestros' || u.role === 'Directivo'),
           materiasList: materiasList,
+          ciclosList: ciclosList,
           calificacionesList: calificacionesList,
           controlRecords: [
-            { id: '1', cicloEscolar: '2026-1', periodo: 'Enero - Junio 2026', turno: 'Matutino', inscritos: alumnosList.length, estatus: 'Activo' }
+            { id: '1', cicloEscolar: activeCycleName, periodo: activeCycle ? activeCycle.periodo : 'Agosto 2026 - Julio 2027', turno: 'Matutino', inscritos: alumnosList.length, estatus: 'Activo' }
           ],
           kardexList: alumnosList.map(a => ({
             id: a.id,
@@ -1630,7 +2206,7 @@ export default function App() {
       }, 1500);
       return () => clearTimeout(timeout);
     }
-  }, [alumnosList, materiasList, calificacionesList, avisosList, systemUsers, token, workspaceResult?.spreadsheetId]);
+  }, [alumnosList, materiasList, calificacionesList, avisosList, systemUsers, ciclosList, token, workspaceResult?.spreadsheetId]);
 
   const handleAdminEmailChange = (newEmail: string) => {
     const trimmed = newEmail.trim();
@@ -1929,6 +2505,361 @@ export default function App() {
               institutionName={institutionName || 'VILLA MONTESSORI DE MORELIA'}
               cicloEscolar="CICLO ESCOLAR 2026-2027"
             />
+          </div>
+        );
+      case 'ciclo-escolar':
+        return (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-6xl mx-auto">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl">
+                  <Calendar size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Gestión de Ciclos Escolares</h2>
+                  <p className="text-xs text-slate-500">Periodos académicos y carpetas de Google Drive vinculadas</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {sheetLink && (
+                  <a 
+                    href={sheetLink} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium py-2.5 px-4 rounded-xl transition-all text-sm flex items-center gap-2"
+                  >
+                    <ExternalLink size={16} />
+                    <span>Ver en Google Sheets</span>
+                  </a>
+                )}
+                <button 
+                  id="btn-nuevo-ciclo-escolar"
+                  onClick={handleOpenCreateCiclo}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                >
+                  <Plus size={18} />
+                  <span>Nuevo Ciclo Escolar</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Search and stats */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text"
+                  placeholder="Buscar por ciclo escolar, periodo o clave..."
+                  value={cicloSearchQuery}
+                  onChange={(e) => setCicloSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+              <div className="text-xs text-slate-500 font-medium">
+                Total Ciclos Registrados: <span className="font-bold text-slate-800">{ciclosList.length}</span> (Sincronizado con Drive & Sheets)
+              </div>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
+                    <th className="py-3 px-4">Clave</th>
+                    <th className="py-3 px-4">Ciclo Escolar</th>
+                    <th className="py-3 px-4">Periodo Académico</th>
+                    <th className="py-3 px-4">Carpeta Google Drive</th>
+                    <th className="py-3 px-4">Base de Datos (Sheets)</th>
+                    <th className="py-3 px-4">Estatus</th>
+                    <th className="py-3 px-4 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {ciclosList
+                    .filter(c => `${c.nombre} ${c.clave} ${c.periodo} ${c.estatus} ${c.observaciones || ''}`.toLowerCase().includes(cicloSearchQuery.toLowerCase()))
+                    .map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          {item.clave}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 border ${
+                            item.estatus === 'Activo' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            <Calendar size={16} />
+                          </div>
+                          <div>
+                            <div className="font-semibold text-slate-800 flex items-center gap-2">
+                              <span>{item.nombre}</span>
+                              {item.estatus === 'Activo' && (
+                                <span className="text-[10px] px-2 py-0.2 font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  Ciclo Activo
+                                </span>
+                              )}
+                            </div>
+                            {item.observaciones && (
+                              <div className="text-[11px] text-slate-400">{item.observaciones}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div>
+                          <span className="text-slate-700 font-medium text-xs block">{item.periodo}</span>
+                          {item.fechaInicio && item.fechaFin && (
+                            <span className="text-[11px] text-slate-400">{item.fechaInicio} al {item.fechaFin}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        {syncingCycleId === item.id ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">
+                            <Loader2 size={13} className="animate-spin text-blue-600" />
+                            <span>Creando en Drive...</span>
+                          </span>
+                        ) : item.folderUrl || (item.estatus === 'Activo' && (workspaceResult?.cycleFolderUrl || localStorage.getItem('sysacad_cycle_folder_link'))) ? (
+                          <a 
+                            href={item.folderUrl || workspaceResult?.cycleFolderUrl || localStorage.getItem('sysacad_cycle_folder_link')!} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline bg-blue-50/60 px-2.5 py-1 rounded-lg border border-blue-100"
+                            title="Abrir carpeta del ciclo en Google Drive"
+                          >
+                            <Folder size={14} className="text-blue-500" />
+                            <span>Carpeta en Drive</span>
+                            <ExternalLink size={11} />
+                          </a>
+                        ) : (
+                          <button
+                            onClick={() => handleSyncCycleToDrive(item)}
+                            className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 bg-indigo-50/80 hover:bg-indigo-100/80 px-2.5 py-1 rounded-lg border border-indigo-200 transition-colors cursor-pointer"
+                            title="Generar carpeta y subcarpetas en Google Drive"
+                          >
+                            <RefreshCw size={12} className="text-indigo-500" />
+                            <span>Crear en Drive</span>
+                          </button>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {item.spreadsheetUrl || (item.estatus === 'Activo' && sheetLink) ? (
+                          <a 
+                            href={item.spreadsheetUrl || sheetLink!} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-emerald-700 hover:text-emerald-900 font-medium hover:underline bg-emerald-50/70 px-2.5 py-1 rounded-lg border border-emerald-200"
+                            title="Abrir base de datos de Google Sheets de este ciclo"
+                          >
+                            <FileSpreadsheet size={14} className="text-emerald-600" />
+                            <span>Hoja Sheets</span>
+                            <ExternalLink size={11} />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-slate-400">Automática en Drive</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                          item.estatus === 'Activo'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : item.estatus === 'Próximo'
+                            ? 'bg-sky-50 text-sky-700 border-sky-200'
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {item.estatus}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleSyncCycleToDrive(item)}
+                            disabled={syncingCycleId === item.id}
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                            title="Sincronizar y generar estructura completa en Drive y Sheets"
+                          >
+                            {syncingCycleId === item.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                          </button>
+                          {item.estatus !== 'Activo' && (
+                            <button
+                              onClick={() => handleSetActiveCiclo(item.id)}
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                              title="Establecer como Ciclo Escolar Activo"
+                            >
+                              <CheckCircle2 size={16} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleOpenEditCiclo(item)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="Editar ciclo escolar"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCiclo(item.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Eliminar ciclo escolar"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {ciclosList.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                        No hay ciclos escolares registrados.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal para Nuevo / Edición de Ciclo Escolar */}
+            {isCicloModalOpen && (
+              <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                      <Calendar size={20} className="text-blue-600" />
+                      {editingCiclo ? 'Edición de Ciclo Escolar' : 'Nuevo Ciclo Escolar'}
+                    </h4>
+                    <button
+                      onClick={() => setIsCicloModalOpen(false)}
+                      className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-1 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveCiclo} className="p-6 space-y-4">
+                    <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-start gap-2.5">
+                      <Sparkles size={16} className="text-blue-600 shrink-0 mt-0.5" />
+                      <p className="leading-relaxed">
+                        <strong className="font-semibold text-blue-900">Estructura Automática en Drive:</strong> Al registrar este ciclo se creará una carpeta dedicada en Google Drive y se copiarán en ella todas las 9 subcarpetas maestras y la hoja de cálculo de Google Sheets.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Clave del Ciclo
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej. CICLO-2026-2027"
+                          value={formCicloClave}
+                          onChange={(e) => setFormCicloClave(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 uppercase"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Estatus
+                        </label>
+                        <select
+                          value={formCicloEstatus}
+                          onChange={(e) => setFormCicloEstatus(e.target.value as any)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        >
+                          <option value="Activo">Activo</option>
+                          <option value="Próximo">Próximo</option>
+                          <option value="Concluido">Concluido</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Nombre del Ciclo Escolar (Carpeta Drive)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej. CICLO ESCOLAR 2026 - 2027"
+                        value={formCicloNombre}
+                        onChange={(e) => setFormCicloNombre(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Periodo Académico
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej. Agosto 2026 - Julio 2027"
+                        value={formCicloPeriodo}
+                        onChange={(e) => setFormCicloPeriodo(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Fecha de Inicio
+                        </label>
+                        <input
+                          type="date"
+                          value={formCicloFechaInicio}
+                          onChange={(e) => setFormCicloFechaInicio(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Fecha de Término
+                        </label>
+                        <input
+                          type="date"
+                          value={formCicloFechaFin}
+                          onChange={(e) => setFormCicloFechaFin(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Observaciones (Opcional)
+                      </label>
+                      <textarea
+                        rows={2}
+                        placeholder="Comentarios o notas relevantes del ciclo escolar..."
+                        value={formCicloObservaciones}
+                        onChange={(e) => setFormCicloObservaciones(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsCicloModalOpen(false)}
+                        className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm cursor-pointer"
+                      >
+                        {editingCiclo ? 'Guardar Cambios' : 'Registrar Ciclo Escolar'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         );
       case 'kardex-alumnos': {
@@ -2323,12 +3254,12 @@ export default function App() {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-6xl mx-auto">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 mb-6">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
+                <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl">
                   <BookOpen size={24} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">Gestión de Materias (Hoja 'Materias' en Google Sheets)</h2>
-                  <p className="text-xs text-slate-500">Plan de estudios y asignación de asignaturas sincronizado con Google Sheets</p>
+                  <h2 className="text-xl font-bold text-slate-800">Plan de Estudios y Gestión de Materias</h2>
+                  <p className="text-xs text-slate-500">Asignaturas y profesores sincronizados con Google Sheets y Google Drive</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -2344,8 +3275,24 @@ export default function App() {
                   </a>
                 )}
                 <button 
+                  onClick={() => window.print()}
+                  className="bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Imprimir plan de materias"
+                >
+                  <Printer size={18} />
+                  <span className="hidden sm:inline">Imprimir</span>
+                </button>
+                <button 
+                  onClick={exportMateriasToCSV}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Exportar materias a Excel"
+                >
+                  <Download size={18} />
+                  <span className="hidden sm:inline">Exportar a Excel</span>
+                </button>
+                <button 
                   onClick={handleOpenCreateMateria}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
                   <Plus size={18} />
                   <span>Nueva Materia</span>
@@ -2359,52 +3306,85 @@ export default function App() {
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
                   type="text"
-                  placeholder="Buscar por materia o profesor..."
+                  placeholder="Buscar por materia, profesor o clave..."
                   value={materiaSearchQuery}
                   onChange={(e) => setMateriaSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
               <div className="text-xs text-slate-500 font-medium">
-                Total Materias: <span className="font-bold text-slate-800">{materiasList.length}</span> (Sincronizado con Drive)
+                Total Materias en Plan de Estudios: <span className="font-bold text-slate-800">{materiasList.length}</span> (Sincronizado con Drive & Sheets)
               </div>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
-                    <th className="py-3 px-4">Nombre de Materia</th>
+                    <th className="py-3 px-4">Clave</th>
+                    <th className="py-3 px-4">Materia / Asignatura</th>
                     <th className="py-3 px-4">Profesor Asignado</th>
-                    <th className="py-3 px-4">Créditos Académicos</th>
-                    <th className="py-3 px-4 text-right">Acciones (Edición / Eliminar)</th>
+                    <th className="py-3 px-4">Créditos</th>
+                    <th className="py-3 px-4">Área / Nivel</th>
+                    <th className="py-3 px-4">Estatus</th>
+                    <th className="py-3 px-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {materiasList
-                    .filter(m => `${m.nombre} ${m.profesor}`.toLowerCase().includes(materiaSearchQuery.toLowerCase()))
+                    .filter(m => `${m.nombre} ${m.profesor} ${m.clave || ''} ${m.area || ''}`.toLowerCase().includes(materiaSearchQuery.toLowerCase()))
                     .map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-medium text-slate-800">{item.nombre}</td>
-                      <td className="py-3 px-4 text-slate-600">{item.profesor}</td>
                       <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                          {item.clave || `MAT-${item.id.slice(-4)}`}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs uppercase overflow-hidden shrink-0 border border-indigo-100">
+                            <BookOpen size={16} />
+                          </div>
+                          <div>
+                            <div className="font-semibold text-slate-800">{item.nombre}</div>
+                            <div className="text-[11px] text-slate-400">{item.area || 'Tronco Común'}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center text-xs font-medium shrink-0">
+                            <TeacherIcon size={13} />
+                          </div>
+                          <span className="text-slate-700 font-medium text-xs">{item.profesor || 'Sin asignar'}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                           {item.creditos} Créditos
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 text-xs">
+                        {item.area || 'Tronco Común'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {item.estatus || 'Activa'}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEditMateria(item)}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                            title="Edición"
+                            className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                            title="Editar materia"
                           >
                             <Edit3 size={16} />
                           </button>
                           <button
                             onClick={() => handleDeleteMateria(item.id)}
                             className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                            title="Eliminar"
+                            title="Eliminar del plan"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -2414,8 +3394,8 @@ export default function App() {
                   ))}
                   {materiasList.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-slate-400 text-sm">
-                        No hay materias registradas.
+                      <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                        No hay materias registradas en el plan de estudios.
                       </td>
                     </tr>
                   )}
@@ -2423,88 +3403,13 @@ export default function App() {
               </table>
             </div>
 
-            {/* Modal para Avisos y Tareas */}
-            {isAvisoModalOpen && (
-              <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                    <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-                      {avisoFormType === 'tarea' ? <Calendar className="text-amber-500" size={20} /> : avisoFormType === 'publico' ? <Users className="text-indigo-500" size={20} /> : <Mail className="text-blue-500" size={20} />}
-                      {avisoFormType === 'tarea' ? 'Nueva Tarea Programada' : avisoFormType === 'publico' ? 'Nuevo Aviso Público' : 'Nuevo Aviso Personal'}
-                    </h4>
-                    <button onClick={() => setIsAvisoModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer">
-                      <X size={20} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleSaveAviso} className="p-6 space-y-4">
-                    {avisoFormType === 'personal' && (
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Destinatario</label>
-                        <select 
-                          required 
-                          value={avisoFormTarget}
-                          onChange={(e) => setAvisoFormTarget(e.target.value)}
-                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                        >
-                          <option value="">Seleccione un destinatario...</option>
-                          {systemUsers.map(u => (
-                            <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                    
-                    {avisoFormType === 'tarea' && (
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Fecha del Evento</label>
-                        <input 
-                          type="date" 
-                          required 
-                          value={avisoFormDate}
-                          onChange={(e) => setAvisoFormDate(e.target.value)}
-                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                        />
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Mensaje</label>
-                      <textarea 
-                        required 
-                        rows={4}
-                        placeholder="Escribe el contenido del aviso aquí..."
-                        value={avisoFormMessage}
-                        onChange={(e) => setAvisoFormMessage(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-2">
-                      <button 
-                        type="button" 
-                        onClick={() => setIsAvisoModalOpen(false)}
-                        className="px-4 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
-                      >
-                        Cancelar
-                      </button>
-                      <button 
-                        type="submit" 
-                        className={`px-4 py-2.5 text-sm font-medium text-white rounded-xl transition-all shadow-sm cursor-pointer ${avisoFormType === 'tarea' ? 'bg-amber-600 hover:bg-amber-700' : avisoFormType === 'publico' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'}`}
-                      >
-                        {avisoFormType === 'tarea' ? 'Programar Tarea' : 'Enviar Aviso'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
             {/* Modal para Nueva / Edición de Materia */}
             {isMateriaModalOpen && (
               <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
                   <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                    <h4 className="font-bold text-slate-800 text-lg">
+                    <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                      <BookOpen size={20} className="text-blue-600" />
                       {editingMateria ? 'Edición de Materia' : 'Nueva Materia'}
                     </h4>
                     <button
@@ -2516,6 +3421,37 @@ export default function App() {
                   </div>
 
                   <form onSubmit={handleSaveMateria} className="p-6 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Clave de Materia
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej. MAT-101"
+                          value={formClaveMateria}
+                          onChange={(e) => setFormClaveMateria(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Créditos Académicos
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          required
+                          value={formCreditos}
+                          onChange={(e) => setFormCreditos(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                         Nombre de la Materia
@@ -2523,7 +3459,7 @@ export default function App() {
                       <input
                         type="text"
                         required
-                        placeholder="Ej. Cálculo Diferencial"
+                        placeholder="Ej. Cálculo Diferencial e Integral"
                         value={formNombreMateria}
                         onChange={(e) => setFormNombreMateria(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -2546,17 +3482,20 @@ export default function App() {
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Créditos Académicos
+                        Área / Departamento
                       </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        required
-                        value={formCreditos}
-                        onChange={(e) => setFormCreditos(e.target.value)}
+                      <select
+                        value={formAreaMateria}
+                        onChange={(e) => setFormAreaMateria(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      />
+                      >
+                        <option value="Ciencias Exactas">Ciencias Exactas</option>
+                        <option value="Humanidades y Ciencias Sociales">Humanidades y Ciencias Sociales</option>
+                        <option value="Lenguas y Comunicación">Lenguas y Comunicación</option>
+                        <option value="Tecnología e Informática">Tecnología e Informática</option>
+                        <option value="Artes y Educación Física">Artes y Educación Física</option>
+                        <option value="Tronco Común">Tronco Común</option>
+                      </select>
                     </div>
 
                     <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
@@ -2791,81 +3730,287 @@ export default function App() {
         );
       case 'maestros':
         const teachersData = systemUsers.filter(u => u.role === 'Maestros' || u.role === 'Docente' || u.role === 'Directivo');
-        const materiasAsignadas = materiasList.length;
+        const filteredTeachers = teachersData.filter(t => 
+          `${t.name} ${t.username} ${t.email} ${t.role} ${t.id}`.toLowerCase().includes(maestroSearchQuery.toLowerCase())
+        );
         
         return (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-5xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-6xl mx-auto">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 mb-6">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
+                <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl">
                   <TeacherIcon size={24} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">Gestión de Maestros y Docentes</h2>
-                  <p className="text-xs text-slate-500">Plantilla docente, asignación de materias y horarios</p>
+                  <h2 className="text-xl font-bold text-slate-800">Plantilla y Gestión de Maestros / Docentes</h2>
+                  <p className="text-xs text-slate-500">Expedientes de profesores y asignación académica sincronizados con Google Sheets y Google Drive</p>
                 </div>
               </div>
-            </div>
-            
-            <div className="grid sm:grid-cols-3 gap-4 mb-6">
-              <div className="p-4 border border-slate-200 rounded-xl bg-slate-50">
-                <p className="text-xs text-slate-500 font-medium">Total Profesores</p>
-                <p className="text-2xl font-bold text-slate-800 mt-1">{teachersData.length}</p>
-              </div>
-              <div className="p-4 border border-slate-200 rounded-xl bg-emerald-50/50 border-emerald-100">
-                <p className="text-xs text-emerald-700 font-medium">Activos este periodo</p>
-                <p className="text-2xl font-bold text-emerald-900 mt-1">{teachersData.filter(t => t.status === 'Activo').length}</p>
-              </div>
-              <div className="p-4 border border-slate-200 rounded-xl bg-blue-50/50 border-blue-100">
-                <p className="text-xs text-blue-700 font-medium">Materias en Sistema</p>
-                <p className="text-2xl font-bold text-blue-900 mt-1">{materiasAsignadas}</p>
+              <div className="flex items-center gap-3">
+                {sheetLink && (
+                  <a 
+                    href={sheetLink} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium py-2.5 px-4 rounded-xl transition-all text-sm flex items-center gap-2"
+                  >
+                    <ExternalLink size={16} />
+                    <span>Ver en Google Sheets</span>
+                  </a>
+                )}
+                <button 
+                  onClick={() => window.print()}
+                  className="bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Imprimir plantilla docente"
+                >
+                  <Printer size={18} />
+                  <span className="hidden sm:inline">Imprimir</span>
+                </button>
+                <button 
+                  onClick={exportMaestrosToCSV}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Exportar plantilla a Excel"
+                >
+                  <Download size={18} />
+                  <span className="hidden sm:inline">Exportar a Excel</span>
+                </button>
+                <button 
+                  onClick={handleOpenCreateMaestro}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                >
+                  <Plus size={18} />
+                  <span>Nuevo Maestro</span>
+                </button>
               </div>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
+            {/* Search and stats */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text"
+                  placeholder="Buscar por nombre, usuario, rol o correo..."
+                  value={maestroSearchQuery}
+                  onChange={(e) => setMaestroSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+              <div className="text-xs text-slate-500 font-medium">
+                Total Docentes Registrados: <span className="font-bold text-slate-800">{teachersData.length}</span> (Sincronizado con Drive & Sheets)
+              </div>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
-                    <th className="py-3 px-4">Docente</th>
-                    <th className="py-3 px-4">Rol</th>
-                    <th className="py-3 px-4">Correo</th>
-                    <th className="py-3 px-4">Estado</th>
+                    <th className="py-3 px-4">Cédula / ID</th>
+                    <th className="py-3 px-4">Maestro / Docente</th>
+                    <th className="py-3 px-4">Rol / Categoría</th>
+                    <th className="py-3 px-4">Contacto / Correo</th>
+                    <th className="py-3 px-4">Estatus</th>
                     <th className="py-3 px-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {teachersData.map((teacher) => (
-                    <tr key={teacher.id}>
-                      <td className="py-3.5 px-4 font-medium text-slate-800">{teacher.name}</td>
-                      <td className="py-3.5 px-4 text-slate-600">{teacher.role}</td>
-                      <td className="py-3.5 px-4 text-slate-500">{teacher.email}</td>
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${teacher.status === 'Activo' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {filteredTeachers.map((teacher) => (
+                    <tr key={teacher.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                          DOC-{teacher.id.slice(-4)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs uppercase overflow-hidden shrink-0 border border-blue-100">
+                            {teacher.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-slate-800">{teacher.name}</div>
+                            <div className="text-[11px] text-slate-400">@{teacher.username}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">
+                          {teacher.role}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="text-slate-600 text-xs flex items-center gap-1.5">
+                          <Mail size={13} className="text-slate-400" />
+                          <span>{teacher.email}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${teacher.status === 'Activo' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
                           {teacher.status}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button 
-                          onClick={() => {
-                            setCurrentView('personal-usuarios');
-                          }}
-                          className="text-blue-600 hover:text-blue-800 font-medium text-xs bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-                        >
-                          Ir a Usuarios
-                        </button>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleOpenEditMaestro(teacher)}
+                            className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                            title="Editar expediente docente"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleToggleUserStatus(teacher.id)}
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                            title={teacher.status === 'Activo' ? 'Desactivar acceso' : 'Activar acceso'}
+                          >
+                            {teacher.status === 'Activo' ? <UserCheck size={16} /> : <UserX size={16} />}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMaestro(teacher.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Eliminar de la plantilla"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
-                  {teachersData.length === 0 && (
+                  {filteredTeachers.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
-                        No hay docentes registrados. Da de alta uno en Personal / Usuarios.
+                      <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                        No hay maestros o docentes registrados con el criterio de búsqueda.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
+
+            {/* Modal para Nuevo / Editar Maestro */}
+            {isMaestroModalOpen && (
+              <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                      <TeacherIcon size={20} className="text-blue-600" />
+                      {editingMaestro ? 'Editar Perfil Docente' : 'Alta de Nuevo Maestro / Docente'}
+                    </h4>
+                    <button
+                      onClick={() => setIsMaestroModalOpen(false)}
+                      className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-1 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveMaestro} className="p-6 space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Nombre Completo del Docente
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej. Prof. Carlos Mendoza Morales"
+                        value={formMaestroName}
+                        onChange={(e) => setFormMaestroName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Usuario (Login)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej. cmendoza"
+                          value={formMaestroLogin}
+                          onChange={(e) => setFormMaestroLogin(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Contraseña de Acceso
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej. Pass123"
+                          value={formMaestroPassword}
+                          onChange={(e) => setFormMaestroPassword(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Correo Electrónico Institucional
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="Ej. carlos.mendoza@escuela.edu.mx"
+                        value={formMaestroEmail}
+                        onChange={(e) => setFormMaestroEmail(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Rol en el Sistema
+                        </label>
+                        <select
+                          value={formMaestroRole}
+                          onChange={(e) => setFormMaestroRole(e.target.value as any)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        >
+                          <option value="Docente">Docente</option>
+                          <option value="Maestros">Maestros</option>
+                          <option value="Directivo">Directivo</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Estado de la Cuenta
+                        </label>
+                        <select
+                          value={formMaestroStatus}
+                          onChange={(e) => setFormMaestroStatus(e.target.value as any)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        >
+                          <option value="Activo">Activo</option>
+                          <option value="Inactivo">Inactivo</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsMaestroModalOpen(false)}
+                        className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm cursor-pointer"
+                      >
+                        {editingMaestro ? 'Guardar Cambios' : 'Registrar Maestro'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         );
       case 'avisos':
@@ -2995,14 +4140,20 @@ export default function App() {
                 <p className="text-xs text-slate-500">Exporta las calificaciones de todos los alumnos por período y materia sincronizado con Google Sheets.</p>
               </div>
 
-              <div className="p-5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => alert('Descargando informe de asistencia y reportes docentes')}>
+              <div 
+                className="p-5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group" 
+                onClick={() => {
+                  playClickSound();
+                  setIsInformeGeneralModalOpen(true);
+                }}
+              >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg group-hover:bg-emerald-200 transition-colors">
                     <FileText size={20} />
                   </div>
-                  <h3 className="font-semibold text-slate-800">Informe de Actividad Docente</h3>
+                  <h3 className="font-semibold text-slate-800 group-hover:text-emerald-800 transition-colors">Informe General de Actividades</h3>
                 </div>
-                <p className="text-xs text-slate-500">Revisión de reportes subidos por los profesores en la carpeta compartida de Google Drive.</p>
+                <p className="text-xs text-slate-500">Métricas, consolidado y reportes detallados de ciclo escolar, docentes y alumnos en tiempo real.</p>
               </div>
             </div>
 
@@ -3310,6 +4461,26 @@ export default function App() {
                               : 'Sincronizar Estructura Completa (Drive & Sheets)'}
                           </span>
                         </button>
+
+                        {(workspaceResult?.cycleFolderUrl || localStorage.getItem('sysacad_cycle_folder_link')) && (
+                          <a 
+                            href={workspaceResult?.cycleFolderUrl || localStorage.getItem('sysacad_cycle_folder_link')!} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-xl hover:border-indigo-300 hover:bg-white transition-all group"
+                          >
+                            <div className="flex items-center gap-3">
+                              <Calendar className="text-indigo-500" size={20} />
+                              <div className="text-left">
+                                <p className="font-semibold text-slate-800 text-xs">
+                                  Carpeta del Ciclo Activo ({ciclosList.find(c => c.estatus === 'Activo')?.nombre || 'CICLO ESCOLAR 2026 - 2027'})
+                                </p>
+                                <p className="text-[10px] text-slate-500">Google Drive (Subcarpetas y expedientes)</p>
+                              </div>
+                            </div>
+                            <ExternalLink size={16} className="text-slate-400 group-hover:text-indigo-600" />
+                          </a>
+                        )}
 
                         {(workspaceResult?.rootFolderUrl || folderLink) && (
                           <a 
@@ -4346,7 +5517,7 @@ export default function App() {
                 className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left hover:scale-[1.02] active:scale-[0.98] ${
                   !isMenuAllowed('control-escolar')
                     ? 'cursor-not-allowed'
-                    : currentView === 'control-escolar' || currentView === 'alumnos' || currentView === 'materias' || currentView === 'maestros' || currentView === 'reportes' || currentView === 'avisos'
+                    : currentView === 'control-escolar' || currentView === 'alumnos' || currentView === 'ciclo-escolar' || currentView === 'materias' || currentView === 'maestros' || currentView === 'reportes' || currentView === 'avisos'
                     ? 'bg-slate-800/80 text-white font-medium cursor-pointer'
                     : 'hover:bg-slate-800 hover:text-white cursor-pointer'
                 }`}
@@ -4374,6 +5545,17 @@ export default function App() {
                   >
                     <Users size={16} className="shrink-0" />
                     <span className="truncate">Alumnos</span>
+                  </button>
+                  <button 
+                    id="nav-ciclo-escolar-btn"
+                    onClick={() => {
+                      playNavigateSound();
+                      setCurrentView('ciclo-escolar');
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer text-left hover:scale-[1.02] active:scale-[0.98] ${currentView === 'ciclo-escolar' ? 'bg-blue-600 text-white shadow-sm font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  >
+                    <Calendar size={16} className="shrink-0" />
+                    <span className="truncate">Ciclo Escolar</span>
                   </button>
                   <button 
                     onClick={() => {
@@ -4584,6 +5766,7 @@ export default function App() {
                     {currentView === 'administrador' ? 'Panel de Administrador' :
                      currentView === 'control-escolar' ? 'Control Escolar y Matrícula' :
                      currentView === 'alumnos' ? 'Gestión de Alumnos' :
+                     currentView === 'ciclo-escolar' ? 'Gestión de Ciclos Escolares' :
                      currentView === 'kardex-alumnos' ? 'Kardex de Alumnos' :
                      currentView === 'maestros' ? 'Gestión de Maestros' :
                      currentView === 'materias' ? 'Gestión de Materias' :
@@ -4783,6 +5966,22 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Modal Emergente: Informe General de Actividades con KPIs Ejecutivos */}
+      <InformesGeneralModal
+        isOpen={isInformeGeneralModalOpen}
+        onClose={() => setIsInformeGeneralModalOpen(false)}
+        institutionName={institutionName}
+        institutionLogo={institutionLogo}
+        ciclosList={ciclosList}
+        alumnosList={alumnosList}
+        materiasList={materiasList}
+        systemUsers={systemUsers}
+        sheetLink={sheetLink}
+        folderLink={folderLink}
+        playClickSound={playClickSound}
+        playSuccessSound={playSuccessSound}
+      />
         </motion.div>
       )}
     </AnimatePresence>

@@ -4,6 +4,9 @@ export const SHEETS_API_URL = 'https://sheets.googleapis.com/v4/spreadsheets';
 export interface WorkspaceSetupResult {
   rootFolderId: string;
   rootFolderUrl: string;
+  cycleFolderId?: string;
+  cycleFolderUrl?: string;
+  cycleFolderName?: string;
   spreadsheetId: string;
   spreadsheetUrl: string;
   subfolders: { name: string; id: string; url: string }[];
@@ -91,6 +94,7 @@ export async function createFullMasterSpreadsheet(token: string, title: string) 
         { properties: { title: 'Alumnos' } },
         { properties: { title: 'Maestros' } },
         { properties: { title: 'Materias' } },
+        { properties: { title: 'Ciclos_Escolares' } },
         { properties: { title: 'Calificaciones' } },
         { properties: { title: 'Control_Escolar' } },
         { properties: { title: 'Kardex' } },
@@ -121,6 +125,7 @@ export async function ensureSpreadsheetTabs(token: string, spreadsheetId: string
       'Alumnos',
       'Maestros',
       'Materias',
+      'Ciclos_Escolares',
       'Calificaciones',
       'Control_Escolar',
       'Kardex',
@@ -198,6 +203,10 @@ export async function writeAllMasterHeaders(token: string, spreadsheetId: string
       values: [['ID', 'Clave', 'Nombre de Materia', 'Grado / Semestre', 'Créditos', 'Maestro Asignado']]
     },
     {
+      range: 'Ciclos_Escolares!A1:I1',
+      values: [['ID Ciclo', 'Clave', 'Nombre del Ciclo', 'Periodo', 'Fecha Inicio', 'Fecha Fin', 'Estatus', 'Observaciones', 'Fecha de Registro']]
+    },
+    {
       range: 'Calificaciones!A1:G1',
       values: [['ID', 'Alumno', 'Materia', 'Parcial / Periodo', 'Calificación', 'Estatus', 'Fecha de Registro']]
     },
@@ -244,6 +253,7 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     studentsList = [],
     teachersList = [],
     materiasList = [],
+    ciclosList = [],
     calificacionesList = [],
     controlRecords = [],
     kardexList = [],
@@ -281,6 +291,18 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     mat.profesor || mat.maestro || 'Por Asignar'
   ]);
 
+  const ciclosRows = ciclosList.map((c: any) => [
+    c.id || '',
+    c.clave || `CICLO-${c.nombre?.match(/\d{4}/)?.[0] || '2026'}`,
+    c.nombre || 'CICLO ESCOLAR 2026 - 2027',
+    c.periodo || 'Agosto 2026 - Julio 2027',
+    c.fechaInicio || '2026-08-15',
+    c.fechaFin || '2027-07-15',
+    c.estatus || 'Activo',
+    c.observaciones || '',
+    c.fechaCreacion || new Date().toISOString().split('T')[0]
+  ]);
+
   const calificacionesRows = calificacionesList.map((c: any) => [
     c.id || '',
     c.alumno || '',
@@ -293,8 +315,8 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
 
   const controlRows = controlRecords.map((cr: any) => [
     cr.id || '',
-    cr.cicloEscolar || '2026-1',
-    cr.periodo || 'Enero - Junio 2026',
+    cr.cicloEscolar || 'CICLO ESCOLAR 2026 - 2027',
+    cr.periodo || 'Agosto 2026 - Julio 2027',
     cr.turno || 'Matutino',
     cr.inscritos !== undefined ? cr.inscritos : studentsList.length,
     cr.estatus || 'Activo'
@@ -335,6 +357,7 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     'Alumnos!A2:I500',
     'Maestros!A2:F500',
     'Materias!A2:F500',
+    'Ciclos_Escolares!A2:I500',
     'Calificaciones!A2:G500',
     'Control_Escolar!A2:F500',
     'Kardex!A2:F500',
@@ -355,6 +378,7 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
   if (alumnosRows.length > 0) dataToUpdate.push({ range: 'Alumnos!A2', values: alumnosRows });
   if (maestrosRows.length > 0) dataToUpdate.push({ range: 'Maestros!A2', values: maestrosRows });
   if (materiasRows.length > 0) dataToUpdate.push({ range: 'Materias!A2', values: materiasRows });
+  if (ciclosRows.length > 0) dataToUpdate.push({ range: 'Ciclos_Escolares!A2', values: ciclosRows });
   if (calificacionesRows.length > 0) dataToUpdate.push({ range: 'Calificaciones!A2', values: calificacionesRows });
   if (controlRows.length > 0) dataToUpdate.push({ range: 'Control_Escolar!A2', values: controlRows });
   if (kardexRows.length > 0) dataToUpdate.push({ range: 'Kardex!A2', values: kardexRows });
@@ -412,14 +436,54 @@ export async function setupSysAcadWorkspace(token: string, appData: any, cachedR
     }
   }
 
-  // 2. Query ALL existing subfolders inside root folder to prevent any duplicate subfolder creation
-  const existingSubfoldersRes = await searchDriveFiles(token, `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-  const existingSubfoldersMap = new Map<string, { id: string; url: string }>();
+  // 2. Identify the active Cycle Name (e.g. "CICLO ESCOLAR 2026 - 2027")
+  const activeCycleName = (appData.activeCycleName || 'CICLO ESCOLAR 2026 - 2027').trim();
+  let cycleFolderId = '';
+  let cycleFolderUrl = '';
+
+  // Check cached cycle folder if still matching
+  if (cachedResult?.cycleFolderId && cachedResult?.cycleFolderName === activeCycleName) {
+    const meta = await getDriveFileMetadata(token, cachedResult.cycleFolderId);
+    if (meta) {
+      cycleFolderId = meta.id;
+      cycleFolderUrl = meta.webViewLink || `https://drive.google.com/drive/folders/${cycleFolderId}`;
+    }
+  }
+
+  // Search inside root folder for the active cycle folder
+  if (!cycleFolderId) {
+    const existingCycleFolders = await searchDriveFiles(token, `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false and name='${activeCycleName}'`);
+    if (existingCycleFolders.files && existingCycleFolders.files.length > 0) {
+      cycleFolderId = existingCycleFolders.files[0].id;
+      cycleFolderUrl = existingCycleFolders.files[0].webViewLink || `https://drive.google.com/drive/folders/${cycleFolderId}`;
+    } else {
+      // Also search anywhere in Drive by cycle name to reuse
+      const globalCycleSearch = await searchDriveFiles(token, `mimeType='application/vnd.google-apps.folder' and trashed=false and name='${activeCycleName}'`);
+      if (globalCycleSearch.files && globalCycleSearch.files.length > 0) {
+        cycleFolderId = globalCycleSearch.files[0].id;
+        cycleFolderUrl = globalCycleSearch.files[0].webViewLink || `https://drive.google.com/drive/folders/${cycleFolderId}`;
+        await moveFileToFolder(token, cycleFolderId, rootFolderId);
+      } else {
+        const createdCycleFolder = await createDriveFolder(token, activeCycleName, rootFolderId);
+        cycleFolderId = createdCycleFolder.id;
+        cycleFolderUrl = createdCycleFolder.webViewLink || `https://drive.google.com/drive/folders/${cycleFolderId}`;
+      }
+    }
+  }
+
+  // 3. Query ALL existing subfolders inside the Cycle Folder (and root) to prevent any duplicate subfolder creation
+  const existingSubfoldersRes = await searchDriveFiles(token, `('${cycleFolderId}' in parents or '${rootFolderId}' in parents) and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const existingSubfoldersMap = new Map<string, { id: string; url: string; parentId?: string }>();
 
   for (const f of existingSubfoldersRes.files || []) {
+    // Skip if it's the cycle folder itself
+    if (f.id === cycleFolderId) continue;
+    
+    const parent = f.parents?.[0];
     existingSubfoldersMap.set(f.name.toLowerCase().trim(), {
       id: f.id,
-      url: f.webViewLink || `https://drive.google.com/drive/folders/${f.id}`
+      url: f.webViewLink || `https://drive.google.com/drive/folders/${f.id}`,
+      parentId: parent
     });
   }
 
@@ -452,16 +516,20 @@ export async function setupSysAcadWorkspace(token: string, appData: any, cachedR
     }
 
     if (existing) {
+      // Ensure it is placed inside the active cycle folder
+      if (existing.parentId !== cycleFolderId) {
+        await moveFileToFolder(token, existing.id, cycleFolderId);
+      }
       subfoldersList.push({ name, id: existing.id, url: existing.url });
     } else {
-      const created = await createDriveFolder(token, name, rootFolderId);
+      const created = await createDriveFolder(token, name, cycleFolderId);
       const url = created.webViewLink || `https://drive.google.com/drive/folders/${created.id}`;
       subfoldersList.push({ name, id: created.id, url });
-      existingSubfoldersMap.set(normalizedName, { id: created.id, url });
+      existingSubfoldersMap.set(normalizedName, { id: created.id, url, parentId: cycleFolderId });
     }
   }
 
-  // 3. Search or verify Master Spreadsheet (Strict reuse to prevent duplicate spreadsheets)
+  // 4. Search or verify Master Spreadsheet inside the Cycle Folder (Strict reuse to prevent duplicates)
   const spreadsheetTitle = 'SysAcad - Base de Datos Central';
   let spreadsheetId = '';
   let spreadsheetUrl = '';
@@ -472,45 +540,186 @@ export async function setupSysAcadWorkspace(token: string, appData: any, cachedR
     if (meta) {
       spreadsheetId = meta.id;
       spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+      await moveFileToFolder(token, spreadsheetId, cycleFolderId);
     }
   }
 
-  // If not found in cache, check inside Root Folder first
+  // If not found in cache, check inside Cycle Folder or Root Folder
   if (!spreadsheetId) {
-    const inRootSheet = await searchDriveFiles(token, `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`);
-    if (inRootSheet.files && inRootSheet.files.length > 0) {
-      spreadsheetId = inRootSheet.files[0].id;
+    const inCycleSheet = await searchDriveFiles(token, `('${cycleFolderId}' in parents or '${rootFolderId}' in parents) and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`);
+    if (inCycleSheet.files && inCycleSheet.files.length > 0) {
+      spreadsheetId = inCycleSheet.files[0].id;
       spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+      await moveFileToFolder(token, spreadsheetId, cycleFolderId);
     }
   }
 
-  // If not in root folder, search across Drive
+  // If not in folders, search across Drive
   if (!spreadsheetId) {
     const existingSheet = await searchDriveFiles(token, `mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and (name contains 'SysAcad' or name contains 'Base de Datos Central')`);
     if (existingSheet.files && existingSheet.files.length > 0) {
       spreadsheetId = existingSheet.files[0].id;
       spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
-      await moveFileToFolder(token, spreadsheetId, rootFolderId);
+      await moveFileToFolder(token, spreadsheetId, cycleFolderId);
     } else {
       const sheetObj = await createFullMasterSpreadsheet(token, spreadsheetTitle);
       spreadsheetId = sheetObj.spreadsheetId;
       spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
-      await moveFileToFolder(token, spreadsheetId, rootFolderId);
+      await moveFileToFolder(token, spreadsheetId, cycleFolderId);
     }
   }
 
-  // 4. Ensure all required sheet tabs exist without duplicating
+  // 5. Ensure all required sheet tabs exist without duplicating
   await ensureSpreadsheetTabs(token, spreadsheetId);
 
-  // 5. Ensure master headers exist
+  // 6. Ensure master headers exist
   await writeAllMasterHeaders(token, spreadsheetId);
 
-  // 6. Sync all current data from app state into the sheets (updates existing rows cleanly)
+  // 7. Sync all current data from app state into the sheets (updates existing rows cleanly without duplicating)
   await syncAllDataToSheets(token, spreadsheetId, appData);
 
   return {
     rootFolderId,
     rootFolderUrl,
+    cycleFolderId,
+    cycleFolderUrl,
+    cycleFolderName: activeCycleName,
+    spreadsheetId,
+    spreadsheetUrl,
+    subfolders: subfoldersList
+  };
+}
+
+export async function setupSpecificCycleInDrive(
+  token: string,
+  cycleName: string,
+  rootFolderId?: string,
+  appData?: any
+): Promise<{
+  cycleFolderId: string;
+  cycleFolderUrl: string;
+  cycleFolderName: string;
+  spreadsheetId: string;
+  spreadsheetUrl: string;
+  subfolders: { name: string; id: string; url: string }[];
+}> {
+  const normalizedCycleName = cycleName.trim();
+  
+  // 1. Ensure Root Folder
+  let parentRootId = rootFolderId;
+  if (parentRootId) {
+    const rootMeta = await getDriveFileMetadata(token, parentRootId);
+    if (!rootMeta) parentRootId = undefined;
+  }
+  if (!parentRootId) {
+    const existingRoots = await searchDriveFiles(token, "name='SysAcad - Control Escolar' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+    if (existingRoots.files && existingRoots.files.length > 0) {
+      parentRootId = existingRoots.files[0].id;
+    } else {
+      const createdRoot = await createDriveFolder(token, 'SysAcad - Control Escolar');
+      parentRootId = createdRoot.id;
+    }
+  }
+
+  // 2. Find or create specific Cycle Folder inside Root Folder
+  let cycleFolderId = '';
+  let cycleFolderUrl = '';
+
+  const cycleSearch = await searchDriveFiles(token, `'${parentRootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false and name='${normalizedCycleName}'`);
+  if (cycleSearch.files && cycleSearch.files.length > 0) {
+    cycleFolderId = cycleSearch.files[0].id;
+    cycleFolderUrl = cycleSearch.files[0].webViewLink || `https://drive.google.com/drive/folders/${cycleFolderId}`;
+  } else {
+    // Global search check
+    const globalSearch = await searchDriveFiles(token, `mimeType='application/vnd.google-apps.folder' and trashed=false and name='${normalizedCycleName}'`);
+    if (globalSearch.files && globalSearch.files.length > 0) {
+      cycleFolderId = globalSearch.files[0].id;
+      cycleFolderUrl = globalSearch.files[0].webViewLink || `https://drive.google.com/drive/folders/${cycleFolderId}`;
+      await moveFileToFolder(token, cycleFolderId, parentRootId);
+    } else {
+      const createdCycle = await createDriveFolder(token, normalizedCycleName, parentRootId);
+      cycleFolderId = createdCycle.id;
+      cycleFolderUrl = createdCycle.webViewLink || `https://drive.google.com/drive/folders/${cycleFolderId}`;
+    }
+  }
+
+  // 3. Search and create all required subfolders inside this specific cycle folder
+  const existingSubfoldersRes = await searchDriveFiles(token, `'${cycleFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const existingSubfoldersMap = new Map<string, { id: string; url: string }>();
+
+  for (const f of existingSubfoldersRes.files || []) {
+    existingSubfoldersMap.set(f.name.toLowerCase().trim(), {
+      id: f.id,
+      url: f.webViewLink || `https://drive.google.com/drive/folders/${f.id}`
+    });
+  }
+
+  const subfolderNames = [
+    '01_Alumnos_Expedientes',
+    '02_Maestros_y_Docentes',
+    '03_Materias_y_Planes',
+    '04_Calificaciones_y_Actas',
+    '05_Control_Escolar',
+    '06_Kardex_y_Reportes',
+    '07_Usuarios_Sistema',
+    '08_Avisos_y_Tareas_Programadas',
+    '09_Respaldos_del_Sistema'
+  ];
+
+  const subfoldersList: { name: string; id: string; url: string }[] = [];
+
+  for (const name of subfolderNames) {
+    const normalizedName = name.toLowerCase().trim();
+    let existing = existingSubfoldersMap.get(normalizedName);
+    if (!existing) {
+      const baseName = name.replace(/^\d+_/, '').toLowerCase().trim();
+      for (const [k, v] of existingSubfoldersMap.entries()) {
+        if (k.includes(baseName) || baseName.includes(k.replace(/^\d+_/, ''))) {
+          existing = v;
+          break;
+        }
+      }
+    }
+
+    if (existing) {
+      subfoldersList.push({ name, id: existing.id, url: existing.url });
+    } else {
+      const created = await createDriveFolder(token, name, cycleFolderId);
+      const url = created.webViewLink || `https://drive.google.com/drive/folders/${created.id}`;
+      subfoldersList.push({ name, id: created.id, url });
+      existingSubfoldersMap.set(normalizedName, { id: created.id, url });
+    }
+  }
+
+  // 4. Create or reuse Master Spreadsheet specifically for this Cycle
+  const spreadsheetTitle = `SysAcad - Base de Datos (${normalizedCycleName})`;
+  let spreadsheetId = '';
+  let spreadsheetUrl = '';
+
+  const inCycleSheet = await searchDriveFiles(token, `'${cycleFolderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`);
+  if (inCycleSheet.files && inCycleSheet.files.length > 0) {
+    spreadsheetId = inCycleSheet.files[0].id;
+    spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+  } else {
+    const sheetObj = await createFullMasterSpreadsheet(token, spreadsheetTitle);
+    spreadsheetId = sheetObj.spreadsheetId;
+    spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+    await moveFileToFolder(token, spreadsheetId, cycleFolderId);
+  }
+
+  // 5. Ensure all sheets tabs and headers
+  await ensureSpreadsheetTabs(token, spreadsheetId);
+  await writeAllMasterHeaders(token, spreadsheetId);
+
+  // 6. Sync app data if provided
+  if (appData) {
+    await syncAllDataToSheets(token, spreadsheetId, appData);
+  }
+
+  return {
+    cycleFolderId,
+    cycleFolderUrl,
+    cycleFolderName: normalizedCycleName,
     spreadsheetId,
     spreadsheetUrl,
     subfolders: subfoldersList
