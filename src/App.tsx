@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, GripVertical, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive } from './google-api';
-import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId } from './auth';
+import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId, validateGoogleToken, clearInvalidToken } from './auth';
 import { playClickSound, playNavigateSound, playLoginSuccessSound, playLogoutSound, playSuccessSound, playErrorSound, playDeleteSound, isSoundMuted, toggleSoundMute } from './soundEffects';
 import { StudentEnrollmentModal, StudentFormData } from './components/StudentEnrollmentModal';
 import { InformesGeneralModal } from './components/InformesGeneralModal';
@@ -2127,7 +2127,19 @@ export default function App() {
       setStatus({ type: 'success', message: 'Carpetas de almacenamiento en Google Drive y base de datos en Google Sheets creadas y vinculadas con todos los campos.' });
     } catch (err: any) {
       console.error('Workspace sync error:', err);
-      setStatus({ type: 'error', message: err.message || 'Error al conectar con Google Drive / Sheets.' });
+      const errMsg = err?.message || String(err);
+      
+      // If the error was a 401 UNAUTHENTICATED / Invalid Credentials, auto-clean and prompt renewal
+      if (errMsg.includes('401') || errMsg.includes('UNAUTHENTICATED') || errMsg.includes('Invalid Credentials') || errMsg.includes('invalid authentication credentials')) {
+        clearInvalidToken();
+        setToken('');
+        setStatus({
+          type: 'error',
+          message: 'Tu sesión o permiso de Google Drive expiró por seguridad. Haz clic nuevamente en el botón de Vincular para renovar la autorización de Google.'
+        });
+      } else {
+        setStatus({ type: 'error', message: err.message || 'Error al conectar con Google Drive / Sheets.' });
+      }
       setWorkspaceSyncStatus(null);
     } finally {
       setIsWorkspaceSyncing(false);
@@ -4280,10 +4292,39 @@ export default function App() {
                         </p>
                       </div>
 
-                      {token && user?.email && (
-                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold flex items-center gap-2">
-                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                          <span>Sesión de Google Activa: <strong>{user.email}</strong></span>
+                      {token && user?.email ? (
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                            <span>Sesión de Google Activa: <strong>{user.email}</strong></span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleGoogleSignInFlow}
+                            disabled={isLoggingIn}
+                            className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-100 hover:bg-blue-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
+                          >
+                            Renovar Permisos
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-2">
+                          <div className="flex items-center gap-2 font-bold text-amber-900">
+                            <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                            <span>Autorización de Google requerida</span>
+                          </div>
+                          <p className="text-slate-600 leading-relaxed">
+                            Vincula tu cuenta de Google para otorgar permisos a SysAcad de crear carpetas en Drive y tablas en Sheets.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleGoogleSignInFlow}
+                            disabled={isLoggingIn}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                          >
+                            {isLoggingIn ? <Loader2 className="animate-spin" size={14} /> : <ExternalLink size={14} />}
+                            <span>Vincular Cuenta de Google (Drive & Sheets)</span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -4291,9 +4332,22 @@ export default function App() {
                     {/* Card 2: Estado de la Base de Datos y Enlaces */}
                     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
                       {status.type === 'error' && (
-                        <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 text-sm flex items-center gap-2">
-                          <ShieldAlert size={18} className="shrink-0" />
-                          <span>{status.message}</span>
+                        <div className="bg-red-50 text-red-800 p-4 rounded-xl border border-red-200 text-sm space-y-2.5">
+                          <div className="flex items-start gap-2">
+                            <ShieldAlert size={18} className="shrink-0 text-red-600 mt-0.5" />
+                            <span className="leading-snug">{status.message}</span>
+                          </div>
+                          <div className="pt-1">
+                            <button
+                              type="button"
+                              onClick={handleGoogleSignInFlow}
+                              disabled={isLoggingIn}
+                              className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs py-2 px-4 rounded-lg transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                            >
+                              <RefreshCw size={14} />
+                              <span>Vincular / Reconectar con Google Ahora</span>
+                            </button>
+                          </div>
                         </div>
                       )}
                       
@@ -4310,7 +4364,13 @@ export default function App() {
                       <div className="grid gap-3">
                         <button
                           type="button"
-                          onClick={() => handleSyncWorkspace()}
+                          onClick={() => {
+                            if (!token) {
+                              handleGoogleSignInFlow();
+                            } else {
+                              handleSyncWorkspace();
+                            }
+                          }}
                           disabled={isWorkspaceSyncing || isLoggingIn}
                           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2.5 cursor-pointer text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -4324,6 +4384,8 @@ export default function App() {
                               ? 'Autenticando con Google...'
                               : isWorkspaceSyncing
                               ? 'Sincronizando Estructura...'
+                              : !token
+                              ? 'Vincular Cuenta de Google y Sincronizar'
                               : 'Sincronizar Estructura Completa (Drive & Sheets)'}
                           </span>
                         </button>

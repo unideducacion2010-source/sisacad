@@ -8,6 +8,9 @@ const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/drive.file');
 provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+provider.setCustomParameters({
+  prompt: 'consent'
+});
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = localStorage.getItem('sysacad_google_access_token');
@@ -19,6 +22,32 @@ export interface GoogleAuthUser {
   uid?: string;
 }
 
+/** Check if token is still valid with Google tokeninfo endpoint */
+export async function validateGoogleToken(token: string): Promise<boolean> {
+  if (!token || typeof token !== 'string') return false;
+  try {
+    const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data.error) return false;
+    // Check scopes if available
+    const scope = data.scope || '';
+    if (scope && (!scope.includes('drive') || !scope.includes('spreadsheets'))) {
+      console.warn('El token no tiene los permisos suficientes de Drive o Sheets:', scope);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearInvalidToken() {
+  cachedAccessToken = null;
+  localStorage.removeItem('sysacad_google_access_token');
+  localStorage.removeItem('sysacad_google_token_time');
+}
+
 export const initAuth = (
   onAuthSuccess?: (user: User | GoogleAuthUser, token: string) => void,
   onAuthFailure?: () => void
@@ -26,7 +55,15 @@ export const initAuth = (
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
       if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
+        validateGoogleToken(cachedAccessToken).then(valid => {
+          if (valid) {
+            if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken!);
+          } else {
+            console.warn('El token de Google en sesión ha caducado.');
+            clearInvalidToken();
+            if (onAuthFailure) onAuthFailure();
+          }
+        });
       } else if (!isSigningIn) {
         cachedAccessToken = null;
         if (onAuthFailure) onAuthFailure();
@@ -38,7 +75,15 @@ export const initAuth = (
         try {
           const parsed = JSON.parse(savedUser);
           cachedAccessToken = savedToken;
-          if (onAuthSuccess) onAuthSuccess(parsed, savedToken);
+          validateGoogleToken(savedToken).then(valid => {
+            if (valid) {
+              if (onAuthSuccess) onAuthSuccess(parsed, savedToken);
+            } else {
+              console.warn('El token de Google guardado ha expirado.');
+              clearInvalidToken();
+              if (onAuthFailure) onAuthFailure();
+            }
+          });
           return;
         } catch {
           // Ignore parse error
@@ -146,9 +191,7 @@ export const googleSignIn = async (): Promise<{ user: User | GoogleAuthUser; acc
       isSigningIn = false;
       return gisResult;
     } catch (gisErr: any) {
-      console.warn('GIS sign in error:', gisErr);
-      isSigningIn = false;
-      throw gisErr;
+      console.warn('GIS sign in no completado, intentando con autenticación alternativa:', gisErr);
     }
   }
 
