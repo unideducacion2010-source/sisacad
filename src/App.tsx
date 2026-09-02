@@ -6,6 +6,7 @@ import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId
 import { playClickSound, playNavigateSound, playLoginSuccessSound, playLogoutSound, playSuccessSound, playErrorSound, playDeleteSound, isSoundMuted, toggleSoundMute } from './soundEffects';
 import { StudentEnrollmentModal, StudentFormData } from './components/StudentEnrollmentModal';
 import { InformesGeneralModal } from './components/InformesGeneralModal';
+import { CalificacionesModal } from './components/CalificacionesModal';
 import { User } from 'firebase/auth';
 
 export interface AppUser {
@@ -273,11 +274,15 @@ export default function App() {
     setIsCalifModalOpen(true);
   };
 
-  const handleSaveCalif = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmedAlumno = formCalifAlumno.trim();
-    const trimmedMateria = formCalifMateria.trim();
-    const trimmedParcial = formCalifParcial.trim();
+  const handleSaveManualCalif = (calif: {
+    alumno: string;
+    materia: string;
+    parcial: string;
+    calificacion: number;
+  }) => {
+    const trimmedAlumno = calif.alumno.trim();
+    const trimmedMateria = calif.materia.trim();
+    const trimmedParcial = calif.parcial.trim();
     if (!trimmedAlumno || !trimmedMateria) return;
 
     const duplicateCalif = calificacionesList.find(c => {
@@ -303,27 +308,39 @@ export default function App() {
       return;
     }
 
-    const numVal = parseFloat(formCalifVal) || 0;
     if (editingCalif) {
       updateCalificaciones(calificacionesList.map(c => c.id === editingCalif.id ? {
         ...c,
-        alumno: formCalifAlumno,
-        materia: formCalifMateria,
-        parcial: formCalifParcial,
-        calificacion: numVal
+        alumno: trimmedAlumno,
+        materia: trimmedMateria,
+        parcial: trimmedParcial,
+        calificacion: calif.calificacion
       } : c));
     } else {
       const newItem: CalificacionItem = {
         id: Date.now().toString(),
-        alumno: formCalifAlumno,
-        materia: formCalifMateria,
-        parcial: formCalifParcial,
-        calificacion: numVal,
+        alumno: trimmedAlumno,
+        materia: trimmedMateria,
+        parcial: trimmedParcial,
+        calificacion: calif.calificacion,
         fecha: new Date().toISOString().split('T')[0]
       };
       updateCalificaciones([newItem, ...calificacionesList]);
     }
+    playSuccessSound();
     setIsCalifModalOpen(false);
+  };
+
+  const handleSaveBatchCalif = (batch: Omit<CalificacionItem, 'id' | 'fecha'>[]) => {
+    const today = new Date().toISOString().split('T')[0];
+    const newItems: CalificacionItem[] = batch.map((item, idx) => ({
+      ...item,
+      id: `${Date.now()}_${idx}`,
+      fecha: today
+    }));
+
+    updateCalificaciones([...newItems, ...calificacionesList]);
+    playSuccessSound();
   };
 
   const handleDeleteCalif = (id: string) => {
@@ -3628,104 +3645,19 @@ export default function App() {
               </table>
             </div>
 
-            {/* Modal para Nueva / Edición de Calificación */}
-            {isCalifModalOpen && (
-              <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                    <h4 className="font-bold text-slate-800 text-lg">
-                      {editingCalif ? 'Edición de Calificación' : 'Nueva Calificación'}
-                    </h4>
-                    <button
-                      onClick={() => setIsCalifModalOpen(false)}
-                      className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-1 cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSaveCalif} className="p-6 space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Nombre del Alumno
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ej. Juan Pérez García"
-                        value={formCalifAlumno}
-                        onChange={(e) => setFormCalifAlumno(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Materia
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ej. Matemáticas Avanzadas"
-                        value={formCalifMateria}
-                        onChange={(e) => setFormCalifMateria(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                          Período / Parcial
-                        </label>
-                        <select
-                          value={formCalifParcial}
-                          onChange={(e) => setFormCalifParcial(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                        >
-                          <option value="Primer Parcial">Primer Parcial</option>
-                          <option value="Segundo Parcial">Segundo Parcial</option>
-                          <option value="Tercer Parcial">Tercer Parcial</option>
-                          <option value="Examen Final">Examen Final</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                          Calificación (0 - 10)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="10"
-                          required
-                          value={formCalifVal}
-                          onChange={(e) => setFormCalifVal(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                      <button
-                        type="button"
-                        onClick={() => setIsCalifModalOpen(false)}
-                        className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 cursor-pointer"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm cursor-pointer"
-                      >
-                        {editingCalif ? 'Guardar Cambios' : 'Registrar Calificación'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
+            {/* Modal para Captura Manual y Captura Rápida (Excel e Imagen IA) */}
+            <CalificacionesModal
+              isOpen={isCalifModalOpen}
+              onClose={() => setIsCalifModalOpen(false)}
+              editingCalif={editingCalif}
+              alumnosList={alumnosList}
+              materiasList={materiasList}
+              onSaveManual={handleSaveManualCalif}
+              onSaveBatch={handleSaveBatchCalif}
+              playClickSound={playClickSound}
+              playSuccessSound={playSuccessSound}
+              playErrorSound={playErrorSound}
+            />
           </div>
         );
       case 'maestros':
