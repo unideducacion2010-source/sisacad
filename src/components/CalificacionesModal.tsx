@@ -13,7 +13,10 @@ import {
   RefreshCw,
   Plus,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  Loader2,
+  Key,
+  Check
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -107,9 +110,25 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
   const [excelSuccessCount, setExcelSuccessCount] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Image Upload States (Ephemeral - Not saved to storage, only in-memory OCR)
+  // Image Upload & AI Processing States (Ephemeral - processed in memory, not saved to storage)
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageSuccessCount, setImageSuccessCount] = useState<number | null>(null);
+  const [imageDefaultParcial, setImageDefaultParcial] = useState('Primer Parcial');
+  const [imageDefaultMateria, setImageDefaultMateria] = useState('');
+  const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('sysacad_gemini_api_key') || '');
+  const [showApiKeySettings, setShowApiKeySettings] = useState(false);
+  const [savedApiKeyNotice, setSavedApiKeyNotice] = useState(false);
+  const [imagePreviewData, setImagePreviewData] = useState<Array<{
+    alumno: string;
+    materia: string;
+    parcial: string;
+    calificacion: number;
+    valido: boolean;
+    errorMsg?: string;
+  }>>([]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   // Clean-up and close handler
@@ -121,6 +140,9 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
     setExcelPreviewData([]);
     setImageFile(null);
     setImagePreviewUrl(null);
+    setImagePreviewData([]);
+    setImageError(null);
+    setImageSuccessCount(null);
     setExcelError(null);
     setExcelSuccessCount(null);
     onClose();
@@ -241,10 +263,166 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+
     setImageFile(file);
+    setImagePreviewData([]);
+    setImageError(null);
+    setImageSuccessCount(null);
     const previewUrl = URL.createObjectURL(file);
     setImagePreviewUrl(previewUrl);
     playClickSound?.();
+  };
+
+  // Helper: compress image to lightweight base64 (preserves OCR legibility while reducing size ~95%)
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (readerEvent) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(readerEvent.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve(dataUrl);
+        };
+        img.onerror = () => reject(new Error('No se pudo cargar la imagen para optimizar.'));
+        img.src = readerEvent.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo seleccionado.'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Process Image with Gemini AI
+  const handleProcessImageWithAI = async () => {
+    if (!imageFile) return;
+    setIsProcessingImage(true);
+    setImageError(null);
+    setImageSuccessCount(null);
+    playClickSound?.();
+
+    try {
+      const compressedBase64 = await compressImage(imageFile);
+
+      const alumnosReferencia = alumnosList.map(a => `${a.apellidos} ${a.nombres}`);
+      const materiasReferencia = materiasList.map(m => m.nombre);
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (customApiKey.trim()) {
+        headers['x-gemini-key'] = customApiKey.trim();
+      }
+
+      const response = await fetch('/api/extract-calificaciones', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          imageBase64: compressedBase64,
+          mimeType: 'image/jpeg',
+          alumnosReferencia,
+          materiasReferencia,
+          parcialDefault: imageDefaultParcial || 'Primer Parcial',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'No se pudieron extraer las calificaciones de la imagen.');
+      }
+
+      if (!result.records || !Array.isArray(result.records) || result.records.length === 0) {
+        throw new Error('La IA no detectó filas de calificaciones legibles en la imagen. Intenta con una imagen más nítida o con mejor iluminación.');
+      }
+
+      const defaultSubject = imageDefaultMateria || (materiasList[0] ? materiasList[0].nombre : 'Materia General');
+
+      const parsed = result.records.map((row: any) => {
+        const rawAlumno = row.alumno || '';
+        const rawMateria = row.materia || defaultSubject;
+        const rawParcial = row.parcial || imageDefaultParcial || 'Primer Parcial';
+        const numVal = typeof row.calificacion === 'number' ? row.calificacion : parseFloat(row.calificacion);
+
+        const isValValid = !isNaN(numVal) && numVal >= 0 && numVal <= 10;
+        const isAlumnoValid = String(rawAlumno).trim().length > 0;
+        const isMateriaValid = String(rawMateria).trim().length > 0;
+
+        let errorMsg = '';
+        if (!isAlumnoValid) errorMsg = 'Falta nombre de alumno';
+        else if (!isMateriaValid) errorMsg = 'Falta materia';
+        else if (!isValValid) errorMsg = 'Calificación inválida (debe ser 0-10)';
+
+        return {
+          alumno: String(rawAlumno).trim(),
+          materia: String(rawMateria).trim(),
+          parcial: String(rawParcial).trim(),
+          calificacion: isValValid ? numVal : 0,
+          valido: isAlumnoValid && isMateriaValid && isValValid,
+          errorMsg: errorMsg || undefined
+        };
+      });
+
+      setImagePreviewData(parsed);
+      playSuccessSound?.();
+    } catch (err: any) {
+      console.error('Error al procesar imagen con IA:', err);
+      setImageError(err?.message || 'Error al procesar la imagen con Gemini IA.');
+      playErrorSound?.();
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
+  // Import Valid Image Records
+  const handleImportImageData = () => {
+    const validRows = imagePreviewData.filter(r => r.valido);
+    if (validRows.length === 0) {
+      alert('No hay registros válidos para importar.');
+      return;
+    }
+
+    onSaveBatch(validRows.map(r => ({
+      alumno: r.alumno,
+      materia: r.materia,
+      parcial: r.parcial,
+      calificacion: r.calificacion
+    })));
+
+    setImageSuccessCount(validRows.length);
+    playSuccessSound?.();
+  };
+
+  // Save custom Gemini API key to localStorage
+  const handleSaveCustomApiKey = (key: string) => {
+    setCustomApiKey(key);
+    localStorage.setItem('sysacad_gemini_api_key', key.trim());
+    setSavedApiKeyNotice(true);
+    setTimeout(() => setSavedApiKeyNotice(false), 2500);
   };
 
   // Template Downloader helper
@@ -641,20 +819,110 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
                     <div className="p-2 bg-purple-100 text-purple-700 rounded-xl shrink-0 mt-0.5">
                       <Sparkles size={18} />
                     </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider">
-                        Extracción Inteligente de Calificaciones desde Imagen (OCR & IA)
-                      </h4>
+                    <div className="flex-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider">
+                          Extracción Inteligente de Calificaciones desde Imagen (OCR & IA)
+                        </h4>
+                        {/* Optional Personal Gemini API Key Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playClickSound?.();
+                            setShowApiKeySettings(!showApiKeySettings);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-200/60 hover:bg-purple-200 text-purple-900 transition-colors cursor-pointer w-fit"
+                          title="Configurar clave de API personal (opcional)"
+                        >
+                          <Key size={12} />
+                          <span>{customApiKey ? 'Clave Gemini Personal Activa' : 'Configurar Clave Gemini (Opcional)'}</span>
+                        </button>
+                      </div>
                       <p className="text-xs text-purple-700 mt-1 leading-relaxed">
-                        Sube una fotografía o escaneo de tu lista de calificaciones en papel, acta física o pizarrón. La Inteligencia Artificial extraerá automáticamente el <strong>Alumno</strong>, <strong>Materia</strong>, <strong>Período</strong> y <strong>Calificación</strong> para cargarlos directamente en la vista del sistema.
+                        Sube una fotografía o escaneo de tu lista de calificaciones en papel, acta física o pizarrón. La Inteligencia Artificial extraerá automáticamente el <strong>Alumno</strong>, <strong>Materia</strong>, <strong>Período</strong> y <strong>Calificación</strong> para cargarlos directamente en el sistema.
                       </p>
+                    </div>
+                  </div>
+
+                  {/* Expandable Optional API Key Panel (Like Planeaciones) */}
+                  {showApiKeySettings && (
+                    <div className="p-3.5 bg-slate-50 border border-purple-200 rounded-xl space-y-2 text-xs animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between">
+                        <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+                          <Key size={13} className="text-purple-600" />
+                          <span>Clave de API Gemini Personal (Opcional)</span>
+                        </label>
+                        {savedApiKeyNotice && (
+                          <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                            <Check size={12} /> ¡Guardada!
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Si dejas este campo vacío, se utilizará la clave del sistema. Si prefieres usar tu propia clave gratuita de Google AI Studio (como en la app de Planeaciones), ingrésala aquí:
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="password"
+                          value={customApiKey}
+                          onChange={(e) => handleSaveCustomApiKey(e.target.value)}
+                          placeholder="AIzaSy..."
+                          className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:border-purple-500"
+                        />
+                        {customApiKey && (
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCustomApiKey('')}
+                            className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-medium cursor-pointer"
+                          >
+                            Quitar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Context Preferences: Default Period and Subject */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50/70 border border-slate-200 rounded-xl text-xs">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">
+                        Período / Parcial por defecto:
+                      </label>
+                      <select
+                        value={imageDefaultParcial}
+                        onChange={(e) => setImageDefaultParcial(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-purple-500"
+                      >
+                        <option value="Primer Parcial">Primer Parcial</option>
+                        <option value="Segundo Parcial">Segundo Parcial</option>
+                        <option value="Tercer Parcial">Tercer Parcial</option>
+                        <option value="Examen Final">Examen Final</option>
+                        <option value="Extraordinario">Extraordinario</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">
+                        Materia (si la imagen no especifica):
+                      </label>
+                      <select
+                        value={imageDefaultMateria}
+                        onChange={(e) => setImageDefaultMateria(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-purple-500"
+                      >
+                        <option value="">Auto-detectar o usar primera materia</option>
+                        {materiasList.map((m) => (
+                          <option key={m.id} value={m.nombre}>
+                            {m.nombre}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
                   {/* Drag and Drop Zone for Image */}
                   <div 
                     onClick={() => imageInputRef.current?.click()}
-                    className="border-2 border-dashed border-purple-200 hover:border-purple-400 bg-purple-50/20 hover:bg-purple-50/50 rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group"
+                    className="border-2 border-dashed border-purple-200 hover:border-purple-400 bg-purple-50/20 hover:bg-purple-50/50 rounded-2xl p-5 sm:p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group"
                   >
                     <input 
                       type="file" 
@@ -665,11 +933,11 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
                     />
                     
                     {imagePreviewUrl ? (
-                      <div className="relative max-h-48 rounded-xl overflow-hidden border border-purple-200 shadow-sm">
+                      <div className="relative max-h-48 rounded-xl overflow-hidden border border-purple-200 shadow-sm bg-slate-900/5">
                         <img 
                           src={imagePreviewUrl} 
                           alt="Lista de Calificaciones" 
-                          className="max-h-48 object-contain"
+                          className="max-h-48 object-contain mx-auto"
                           referrerPolicy="no-referrer"
                         />
                         <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
@@ -686,7 +954,7 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
                             Haz clic o arrastra tu fotografía o escaneo de calificaciones
                           </h4>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            Formatos soportados: <strong className="text-purple-700">JPG, PNG, WEBP</strong>
+                            Formatos soportados: <strong className="text-purple-700">JPG, PNG, WEBP</strong> (se comprime en el navegador antes de enviar)
                           </p>
                         </div>
                       </>
@@ -694,24 +962,211 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
                   </div>
 
                   {/* Image Processing Action Button */}
-                  {imageFile && (
+                  {imageFile && imagePreviewData.length === 0 && imageSuccessCount === null && (
                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-semibold text-slate-700">Archivo seleccionado: <strong>{imageFile.name}</strong></span>
-                        <span className="text-slate-400">{(imageFile.size / 1024).toFixed(1)} KB</span>
+                        <span className="text-slate-400">{(imageFile.size / 1024).toFixed(1)} KB original</span>
                       </div>
                       
                       <button
                         type="button"
-                        onClick={() => {
-                          playSuccessSound?.();
-                          alert('Módulo de Visión IA preparado: La lectura y extracción automática desde la imagen se procesará para convertir los registros a la vista de captura.');
-                        }}
-                        className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                        disabled={isProcessingImage}
+                        onClick={handleProcessImageWithAI}
+                        className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-75 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
                       >
-                        <Sparkles size={16} />
-                        <span>Analizar y Extraer Calificaciones con IA</span>
+                        {isProcessingImage ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            <span>Analizando lista con Gemini IA... Extrayendo alumnos y notas...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={16} />
+                            <span>Analizar y Extraer Calificaciones con IA</span>
+                          </>
+                        )}
                       </button>
+                    </div>
+                  )}
+
+                  {/* Error Notification */}
+                  {imageError && (
+                    <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3 text-xs text-rose-800 animate-in fade-in duration-150">
+                      <AlertCircle size={18} className="text-rose-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <span className="font-bold block">No se pudo completar el análisis:</span>
+                        <p className="mt-0.5 text-rose-700">{imageError}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleProcessImageWithAI}
+                        disabled={isProcessingImage}
+                        className="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded-lg text-xs font-semibold cursor-pointer shrink-0"
+                      >
+                        Reintentar
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Success Notification */}
+                  {imageSuccessCount !== null && (
+                    <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col items-center justify-center text-center space-y-3 animate-in fade-in duration-200">
+                      <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                        <CheckCircle size={26} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-emerald-900">¡Calificaciones Importadas con Éxito!</h4>
+                        <p className="text-xs text-emerald-700 mt-1">
+                          Se han registrado <strong>{imageSuccessCount} calificaciones</strong> extraídas por IA y están sincronizadas con el sistema y Google Sheets.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageFile(null);
+                            setImagePreviewUrl(null);
+                            setImagePreviewData([]);
+                            setImageSuccessCount(null);
+                          }}
+                          className="px-4 py-2 bg-white border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl hover:bg-emerald-50 cursor-pointer shadow-xs"
+                        >
+                          Escanear otra imagen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleModalClose}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs"
+                        >
+                          Finalizar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview Table of Extracted Image Data */}
+                  {imagePreviewData.length > 0 && imageSuccessCount === null && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                          <Sparkles size={14} className="text-purple-600" />
+                          <span>Calificaciones detectadas por IA ({imagePreviewData.length} alumnos):</span>
+                        </span>
+                        <span className="text-emerald-700 font-semibold">
+                          {imagePreviewData.filter(r => r.valido).length} listos para importar
+                        </span>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto shadow-xs">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 sticky top-0">
+                            <tr>
+                              <th className="py-2.5 px-3">Estado</th>
+                              <th className="py-2.5 px-3">Alumno</th>
+                              <th className="py-2.5 px-3">Materia</th>
+                              <th className="py-2.5 px-3">Parcial</th>
+                              <th className="py-2.5 px-3 text-right">Calificación</th>
+                              <th className="py-2.5 px-3 text-center">Acción</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {imagePreviewData.map((row, idx) => (
+                              <tr key={idx} className={row.valido ? 'hover:bg-slate-50/80' : 'bg-rose-50/50'}>
+                                <td className="py-2 px-3">
+                                  {row.valido ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                      ✓ Correcto
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800" title={row.errorMsg}>
+                                      ✕ {row.errorMsg || 'Error'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 font-medium text-slate-800">
+                                  <input
+                                    type="text"
+                                    value={row.alumno}
+                                    onChange={(e) => {
+                                      const updated = [...imagePreviewData];
+                                      updated[idx].alumno = e.target.value;
+                                      updated[idx].valido = e.target.value.trim().length > 0 && updated[idx].calificacion >= 0 && updated[idx].calificacion <= 10;
+                                      setImagePreviewData(updated);
+                                    }}
+                                    className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-purple-500 focus:bg-white px-1 py-0.5 rounded outline-none"
+                                  />
+                                </td>
+                                <td className="py-2 px-3 text-slate-600">
+                                  <input
+                                    type="text"
+                                    value={row.materia}
+                                    onChange={(e) => {
+                                      const updated = [...imagePreviewData];
+                                      updated[idx].materia = e.target.value;
+                                      setImagePreviewData(updated);
+                                    }}
+                                    className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-purple-500 focus:bg-white px-1 py-0.5 rounded outline-none"
+                                  />
+                                </td>
+                                <td className="py-2 px-3 text-slate-500">{row.parcial}</td>
+                                <td className="py-2 px-3 text-right">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    max="10"
+                                    value={row.calificacion}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value);
+                                      const updated = [...imagePreviewData];
+                                      updated[idx].calificacion = isNaN(val) ? 0 : val;
+                                      updated[idx].valido = !isNaN(val) && val >= 0 && val <= 10 && updated[idx].alumno.trim().length > 0;
+                                      setImagePreviewData(updated);
+                                    }}
+                                    className="w-16 text-right px-2 py-0.5 font-bold border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-purple-500"
+                                  />
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setImagePreviewData(imagePreviewData.filter((_, i) => i !== idx));
+                                    }}
+                                    className="text-slate-400 hover:text-rose-600 p-1 transition-colors cursor-pointer"
+                                    title="Eliminar fila"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageFile(null);
+                            setImagePreviewUrl(null);
+                            setImagePreviewData([]);
+                          }}
+                          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 cursor-pointer w-full sm:w-auto"
+                        >
+                          Limpiar / Nueva Imagen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleImportImageData}
+                          disabled={imagePreviewData.filter(r => r.valido).length === 0}
+                          className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center justify-center gap-2 w-full sm:w-auto"
+                        >
+                          <CheckCircle size={15} />
+                          <span>Importar {imagePreviewData.filter(r => r.valido).length} Calificaciones al Sistema</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -2374,17 +2374,6 @@ export default function App() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {sheetLink && (
-                  <a 
-                    href={sheetLink} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium py-2.5 px-4 rounded-xl transition-all text-sm flex items-center gap-2"
-                  >
-                    <ExternalLink size={16} />
-                    <span>Ver en Google Sheets</span>
-                  </a>
-                )}
                 <button 
                   onClick={() => window.print()}
                   className="bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
@@ -2538,17 +2527,6 @@ export default function App() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {sheetLink && (
-                  <a 
-                    href={sheetLink} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium py-2.5 px-4 rounded-xl transition-all text-sm flex items-center gap-2"
-                  >
-                    <ExternalLink size={16} />
-                    <span>Ver en Google Sheets</span>
-                  </a>
-                )}
                 <button 
                   id="btn-nuevo-ciclo-escolar"
                   onClick={handleOpenCreateCiclo}
@@ -2948,17 +2926,6 @@ export default function App() {
                   <p className="text-xs text-slate-500">Consulte el kardex de calificaciones parciales y finales del alumno de forma interactiva</p>
                 </div>
               </div>
-              {sheetLink && (
-                <a 
-                  href={sheetLink} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium py-2 px-3.5 rounded-xl transition-all text-xs flex items-center gap-2"
-                >
-                  <ExternalLink size={14} />
-                  <span>Ver en Google Sheets</span>
-                </a>
-              )}
             </div>
 
             {/* Pedir el nombre del alumno */}
@@ -3280,17 +3247,6 @@ export default function App() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {sheetLink && (
-                  <a 
-                    href={sheetLink} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium py-2.5 px-4 rounded-xl transition-all text-sm flex items-center gap-2"
-                  >
-                    <ExternalLink size={16} />
-                    <span>Ver en Google Sheets</span>
-                  </a>
-                )}
                 <button 
                   onClick={() => window.print()}
                   className="bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
@@ -3550,17 +3506,6 @@ export default function App() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {sheetLink && (
-                  <a 
-                    href={sheetLink} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium py-2.5 px-4 rounded-xl transition-all text-sm flex items-center gap-2"
-                  >
-                    <ExternalLink size={16} />
-                    <span>Ver en Google Sheets</span>
-                  </a>
-                )}
                 <button 
                   onClick={handleOpenCreateCalif}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
@@ -3679,17 +3624,6 @@ export default function App() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {sheetLink && (
-                  <a 
-                    href={sheetLink} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium py-2.5 px-4 rounded-xl transition-all text-sm flex items-center gap-2"
-                  >
-                    <ExternalLink size={16} />
-                    <span>Ver en Google Sheets</span>
-                  </a>
-                )}
                 <button 
                   onClick={() => window.print()}
                   className="bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
