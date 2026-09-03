@@ -6,6 +6,7 @@ import {
   Download, 
   Printer, 
   ExternalLink, 
+  FolderOpen,
   X, 
   GraduationCap, 
   CheckCircle2, 
@@ -19,6 +20,7 @@ import {
   School,
   ChevronDown
 } from 'lucide-react';
+import { resolveDriveFolderLink } from '../driveLinks';
 
 interface CicloEscolarItem {
   id: string;
@@ -79,6 +81,7 @@ interface InformesGeneralModalProps {
   systemUsers: SystemUser[];
   sheetLink?: string | null;
   folderLink?: string | null;
+  workspaceResult?: any;
   playClickSound?: () => void;
   playSuccessSound?: () => void;
 }
@@ -93,10 +96,20 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
   materiasList,
   systemUsers,
   sheetLink,
+  folderLink,
+  workspaceResult,
   playClickSound,
   playSuccessSound
 }) => {
   const [activeTab, setActiveTab] = useState<'ciclo' | 'docentes' | 'alumnos'>('ciclo');
+
+  // Resolved Google Drive Link depending on the currently open view
+  const activeDriveLink = useMemo(() => {
+    let category: 'ciclo' | 'docentes' | 'alumnos' = 'ciclo';
+    if (activeTab === 'docentes') category = 'docentes';
+    else if (activeTab === 'alumnos') category = 'alumnos';
+    return resolveDriveFolderLink(category, workspaceResult, folderLink, sheetLink);
+  }, [activeTab, workspaceResult, folderLink, sheetLink]);
   
   // Selected cycle for KPI calculation
   const [selectedCycleName, setSelectedCycleName] = useState<string>(() => {
@@ -226,6 +239,17 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <a 
+              href={activeDriveLink.url} 
+              target="_blank" 
+              rel="noreferrer"
+              onClick={() => playClickSound?.()}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-1.5 px-3 rounded-lg transition-all text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+              title={activeDriveLink.tooltip}
+            >
+              <FolderOpen size={13} />
+              <span>Abrir</span>
+            </a>
             {sheetLink && (
               <a 
                 href={sheetLink} 

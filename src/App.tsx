@@ -6,7 +6,9 @@ import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId
 import { playClickSound, playNavigateSound, playLoginSuccessSound, playLogoutSound, playSuccessSound, playErrorSound, playDeleteSound, isSoundMuted, toggleSoundMute } from './soundEffects';
 import { StudentEnrollmentModal, StudentFormData } from './components/StudentEnrollmentModal';
 import { InformesGeneralModal } from './components/InformesGeneralModal';
+import { BoletinGeneralModal } from './components/BoletinGeneralModal';
 import { CalificacionesModal } from './components/CalificacionesModal';
+import { DirectTablePrintModal, TablePrintType } from './components/DirectTablePrintModal';
 import { User } from 'firebase/auth';
 
 export interface AppUser {
@@ -34,7 +36,18 @@ export default function App() {
     return saved ? Math.max(180, Math.min(480, Number(saved))) : 260;
   });
   const [isResizing, setIsResizing] = useState(false);
-  const [currentView, setCurrentView] = useState('administrador');
+  const [currentView, setCurrentView] = useState(() => {
+    const saved = localStorage.getItem('sysacad_session_user');
+    if (saved) {
+      try {
+        const u = JSON.parse(saved);
+        if (u.role === 'Control Escolar' || u.role === 'Secretaría' || u.role === 'Directivo') return 'alumnos';
+        if (u.role === 'Maestros' || u.role === 'Docente') return 'calificaciones';
+        if (u.role === 'Alumno') return 'kardex-alumnos';
+      } catch (e) {}
+    }
+    return 'administrador';
+  });
   const [adminTab, setAdminTab] = useState<'config' | 'usuarios' | 'seguridad' | 'respaldos' | 'parametros'>('config');
   const [isControlEscolarSubOpen, setIsControlEscolarSubOpen] = useState(true);
   const [isMaestrosSubOpen, setIsMaestrosSubOpen] = useState(true);
@@ -112,12 +125,19 @@ export default function App() {
       }
     }
 
-    // Filter to only keep administrator or return fresh admin if clean
-    const filtered = parsed.filter(u => u.username?.toLowerCase() === 'admin' || u.role === 'Administrador');
-    const result = filtered.length > 0 ? filtered.map(u => ({ ...u, password: u.password || 'admin123', role: 'Administrador' as const, status: 'Activo' as const })) : [adminUser];
+    // Preserve all registered users and guarantee the admin account is always present
+    if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+      const hasAdmin = parsed.some(u => u.username?.toLowerCase() === 'admin' || u.role === 'Administrador');
+      if (!hasAdmin) {
+        const fullList = [adminUser, ...parsed];
+        localStorage.setItem('sysacad_system_users_v2', JSON.stringify(fullList));
+        return fullList;
+      }
+      return parsed;
+    }
     
-    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(result));
-    return result;
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify([adminUser]));
+    return [adminUser];
   });
 
   // Interfaces
@@ -803,7 +823,7 @@ export default function App() {
   const [formMaestroLogin, setFormMaestroLogin] = useState('');
   const [formMaestroPassword, setFormMaestroPassword] = useState('');
   const [formMaestroEmail, setFormMaestroEmail] = useState('');
-  const [formMaestroRole, setFormMaestroRole] = useState<'Maestros' | 'Docente' | 'Directivo'>('Docente');
+  const [formMaestroRole, setFormMaestroRole] = useState<'Maestros' | 'Docente' | 'Directivo'>('Maestros');
   const [formMaestroStatus, setFormMaestroStatus] = useState<'Activo' | 'Inactivo'>('Activo');
 
   const handleOpenCreateMaestro = () => {
@@ -812,7 +832,7 @@ export default function App() {
     setFormMaestroLogin('');
     setFormMaestroPassword('');
     setFormMaestroEmail('');
-    setFormMaestroRole('Docente');
+    setFormMaestroRole('Maestros');
     setFormMaestroStatus('Activo');
     setIsMaestroModalOpen(true);
   };
@@ -989,6 +1009,13 @@ export default function App() {
   const [isInformeGeneralModalOpen, setIsInformeGeneralModalOpen] = useState(false);
   const [informeTab, setInformeTab] = useState<'ciclo' | 'docentes' | 'alumnos'>('ciclo');
   const [informeSearchQuery, setInformeSearchQuery] = useState('');
+
+  // State for Boletin General Modal (3 options: Lista de alumnos, Kardex de calificaciones, Lista de asistencia)
+  const [isBoletinGeneralModalOpen, setIsBoletinGeneralModalOpen] = useState(false);
+
+  // State for Direct Table Print Modal (Alumnos, Maestros, Materias)
+  const [isDirectTablePrintModalOpen, setIsDirectTablePrintModalOpen] = useState(false);
+  const [directTablePrintType, setDirectTablePrintType] = useState<TablePrintType>('alumnos');
 
   const exportInformeGeneralToCSV = () => {
     let csvContent = '\uFEFF';
@@ -1809,10 +1836,18 @@ export default function App() {
 
     if (foundUser.role === 'Administrador') {
       setCurrentView('administrador');
-    } else if (foundUser.role === 'Control Escolar') {
+    } else if (foundUser.role === 'Directivo') {
+      setIsControlEscolarSubOpen(true);
+      setIsMaestrosSubOpen(true);
+      setCurrentView('alumnos');
+    } else if (foundUser.role === 'Control Escolar' || foundUser.role === 'Secretaría') {
+      setIsControlEscolarSubOpen(true);
       setCurrentView('alumnos');
     } else if (foundUser.role === 'Maestros' || foundUser.role === 'Docente') {
+      setIsMaestrosSubOpen(true);
       setCurrentView('calificaciones');
+    } else if (foundUser.role === 'Alumno') {
+      setCurrentView('kardex-alumnos');
     } else {
       setCurrentView('alumnos');
     }
@@ -1910,17 +1945,40 @@ export default function App() {
     if (!sessionUser) return false;
     const role = sessionUser.role;
     if (role === 'Administrador') return true;
-    if (role === 'Control Escolar') {
-      return ['control-escolar', 'alumnos', 'ciclo-escolar', 'personal-usuarios', 'materias', 'reportes', 'kardex-alumnos', 'maestros', 'avisos'].includes(menuId);
+    if (role === 'Directivo') {
+      return menuId === 'control-escolar' || menuId === 'maestros';
+    }
+    if (role === 'Control Escolar' || role === 'Secretaría') {
+      return menuId === 'control-escolar';
     }
     if (role === 'Maestros' || role === 'Docente') {
-      return ['maestros', 'calificaciones', 'kardex-alumnos', 'avisos'].includes(menuId);
+      return menuId === 'maestros';
     }
     if (role === 'Alumno') {
-      return ['kardex-alumnos'].includes(menuId);
+      return menuId === 'kardex-alumnos';
     }
     return false;
   };
+
+  // Guard for role-based view isolation: ensure users only see their authorized view
+  useEffect(() => {
+    if (sessionUser) {
+      const allowedControlViews = ['control-escolar', 'alumnos', 'ciclo-escolar', 'materias', 'maestros', 'reportes', 'avisos'];
+      const allowedDirectivoViews = ['control-escolar', 'alumnos', 'ciclo-escolar', 'materias', 'maestros', 'reportes', 'avisos', 'calificaciones'];
+      if (sessionUser.role === 'Directivo' && !allowedDirectivoViews.includes(currentView)) {
+        setCurrentView('alumnos');
+        setIsControlEscolarSubOpen(true);
+      } else if ((sessionUser.role === 'Control Escolar' || sessionUser.role === 'Secretaría') && !allowedControlViews.includes(currentView)) {
+        setCurrentView('alumnos');
+        setIsControlEscolarSubOpen(true);
+      } else if ((sessionUser.role === 'Maestros' || sessionUser.role === 'Docente') && !['calificaciones', 'avisos'].includes(currentView)) {
+        setCurrentView('calificaciones');
+        setIsMaestrosSubOpen(true);
+      } else if (sessionUser.role === 'Alumno' && currentView !== 'kardex-alumnos') {
+        setCurrentView('kardex-alumnos');
+      }
+    }
+  }, [sessionUser, currentView]);
 
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -2399,9 +2457,13 @@ export default function App() {
               </div>
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    if (playClickSound) playClickSound();
+                    setDirectTablePrintType('alumnos');
+                    setIsDirectTablePrintModalOpen(true);
+                  }}
                   className="bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
-                  title="Imprimir lista de alumnos"
+                  title="Imprimir lista general de alumnos"
                 >
                   <Printer size={18} />
                   <span className="hidden sm:inline">Imprimir</span>
@@ -3243,9 +3305,13 @@ export default function App() {
               </div>
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    if (playClickSound) playClickSound();
+                    setDirectTablePrintType('materias');
+                    setIsDirectTablePrintModalOpen(true);
+                  }}
                   className="bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
-                  title="Imprimir plan de materias"
+                  title="Imprimir plan general de materias"
                 >
                   <Printer size={18} />
                   <span className="hidden sm:inline">Imprimir</span>
@@ -3641,9 +3707,13 @@ export default function App() {
               </div>
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    if (playClickSound) playClickSound();
+                    setDirectTablePrintType('maestros');
+                    setIsDirectTablePrintModalOpen(true);
+                  }}
                   className="bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
-                  title="Imprimir plantilla docente"
+                  title="Imprimir plantilla general de docentes"
                 >
                   <Printer size={18} />
                   <span className="hidden sm:inline">Imprimir</span>
@@ -3853,10 +3923,13 @@ export default function App() {
                           onChange={(e) => setFormMaestroRole(e.target.value as any)}
                           className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                         >
+                          <option value="Maestros">Maestros (Portal Docente)</option>
                           <option value="Docente">Docente</option>
-                          <option value="Maestros">Maestros</option>
-                          <option value="Directivo">Directivo</option>
+                          <option value="Directivo">Directivo (Control Escolar y Maestros)</option>
                         </select>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Directivo tiene acceso a Control Escolar y Maestros (Administrador y Kardex Alumnos apagados). Maestros solo a su portal.
+                        </p>
                       </div>
 
                       <div>
@@ -3964,7 +4037,7 @@ export default function App() {
                           <p className="text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-100 mt-2">{aviso.message}</p>
                         </div>
                       </div>
-                      {(sessionUser?.role === 'Administrador' || sessionUser?.role === 'Control Escolar' || aviso.senderId === sessionUser?.id) && (
+                      {(sessionUser?.role === 'Administrador' || sessionUser?.role === 'Control Escolar' || sessionUser?.role === 'Directivo' || aviso.senderId === sessionUser?.id) && (
                         <div className="flex items-center gap-2 shrink-0">
                           <button 
                             onClick={() => handleOpenEditAviso(aviso)}
@@ -4012,14 +4085,20 @@ export default function App() {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4 mb-6">
-              <div className="p-5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => alert('Descargando reporte de calificaciones por grupo')}>
+              <div 
+                className="p-5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group" 
+                onClick={() => {
+                  playClickSound();
+                  setIsBoletinGeneralModalOpen(true);
+                }}
+              >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
+                  <div className="p-2 bg-blue-100 text-blue-700 rounded-lg group-hover:bg-blue-200 transition-colors">
                     <FileSpreadsheet size={20} />
                   </div>
-                  <h3 className="font-semibold text-slate-800">Boletín General de Calificaciones</h3>
+                  <h3 className="font-semibold text-slate-800 group-hover:text-blue-800 transition-colors">Boletín General</h3>
                 </div>
-                <p className="text-xs text-slate-500">Exporta las calificaciones de todos los alumnos por período y materia sincronizado con Google Sheets.</p>
+                <p className="text-xs text-slate-500">Expedientes y reportes oficiales con 3 módulos: lista de alumnos, kardex de calificaciones y lista de asistencia.</p>
               </div>
 
               <div 
@@ -4442,12 +4521,40 @@ export default function App() {
                             <div className="flex items-center gap-3">
                               <FileSpreadsheet className="text-emerald-500" size={20} />
                               <div className="text-left">
-                                <p className="font-semibold text-slate-800 text-xs">Base de Datos Central</p>
-                                <p className="text-[10px] text-slate-500">Google Sheets (Alumnos, Maestros, Materias...)</p>
+                                <p className="font-semibold text-slate-800 text-xs">Base de Datos Central (11 Tablas)</p>
+                                <p className="text-[10px] text-slate-500">Google Sheets (Alumnos, Maestros, Asistencias, Calificaciones...)</p>
                               </div>
                             </div>
                             <ExternalLink size={16} className="text-slate-400 group-hover:text-emerald-600" />
                           </a>
+                        )}
+
+                        {/* List of Synchronized Google Drive Subfolders */}
+                        {workspaceResult?.subfolders && workspaceResult.subfolders.length > 0 && (
+                          <div className="pt-2">
+                            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center justify-between">
+                              <span>Estructura de Carpetas en Google Drive</span>
+                              <span className="text-[11px] font-normal text-slate-500">{workspaceResult.subfolders.length} carpetas</span>
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                              {workspaceResult.subfolders.map((sf, idx) => (
+                                <a
+                                  key={sf.id || idx}
+                                  href={sf.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/40 transition-all text-xs group"
+                                  title={`Abrir carpeta ${sf.name} en Google Drive`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Folder size={14} className="text-blue-500 shrink-0" />
+                                    <span className="font-medium text-slate-700 truncate">{sf.name.replace(/^\d+_/, '').replace(/_/g, ' ')}</span>
+                                  </div>
+                                  <ExternalLink size={12} className="text-slate-400 group-hover:text-blue-600 shrink-0" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -4835,13 +4942,16 @@ export default function App() {
                               onChange={(e) => setFormUserRole(e.target.value as any)}
                               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                             >
-                              <option value="Administrador">Administrador</option>
-                              <option value="Control Escolar">Control Escolar</option>
-                              <option value="Maestros">Maestros</option>
+                              <option value="Administrador">Administrador (Acceso Total)</option>
+                              <option value="Directivo">Directivo (Control Escolar y Maestros)</option>
+                              <option value="Control Escolar">Control Escolar (Solo Control Escolar)</option>
+                              <option value="Secretaría">Secretaría (Solo Control Escolar)</option>
+                              <option value="Maestros">Maestros (Portal Docente)</option>
                               <option value="Docente">Docente</option>
-                              <option value="Secretaría">Secretaría</option>
-                              <option value="Directivo">Directivo</option>
                             </select>
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              Directivo: control de Control Escolar y Maestros (Administrador y Kardex Alumnos apagados). Control Escolar / Secretaría: solo Control Escolar. Maestros: solo Maestros.
+                            </p>
                           </div>
 
                           <div>
@@ -5423,21 +5533,21 @@ export default function App() {
                 }
               }}
               disabled={!isMenuAllowed('administrador')}
-              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all text-left hover:scale-[1.02] active:scale-[0.98] ${
+              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all text-left ${
                 !isMenuAllowed('administrador')
-                  ? 'opacity-40 cursor-not-allowed select-none'
+                  ? 'opacity-30 cursor-not-allowed select-none text-slate-500 bg-slate-900/40 hover:bg-slate-900/40'
                   : currentView === 'administrador'
-                  ? 'bg-blue-600 text-white shadow-sm cursor-pointer'
-                  : 'hover:bg-slate-800 hover:text-white cursor-pointer'
+                  ? 'bg-blue-600 text-white shadow-sm cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                  : 'hover:bg-slate-800 hover:text-white cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
               }`}
             >
-              <ShieldCheck size={20} className="shrink-0" />
+              <ShieldCheck size={20} className={`shrink-0 ${!isMenuAllowed('administrador') ? 'text-slate-600' : 'text-slate-300'}`} />
               <span className="font-medium truncate flex-1">Administrador</span>
-              {!isMenuAllowed('administrador') && <Lock size={14} className="text-slate-500 shrink-0" />}
+              {!isMenuAllowed('administrador') && <Lock size={14} className="text-slate-600 shrink-0" />}
             </button>
             
             {/* Control Escolar with submenus: Alumnos, Materias, Reportes */}
-            <div className={`space-y-1 transition-opacity ${!isMenuAllowed('control-escolar') ? 'opacity-40 select-none' : ''}`}>
+            <div className={`space-y-1 transition-opacity ${!isMenuAllowed('control-escolar') ? 'opacity-30 select-none' : ''}`}>
               <button 
                 onClick={() => {
                   if (isMenuAllowed('control-escolar')) {
@@ -5446,23 +5556,26 @@ export default function App() {
                   }
                 }}
                 disabled={!isMenuAllowed('control-escolar')}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left hover:scale-[1.02] active:scale-[0.98] ${
+                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left ${
                   !isMenuAllowed('control-escolar')
-                    ? 'cursor-not-allowed'
+                    ? 'cursor-not-allowed text-slate-500 bg-slate-900/40 hover:bg-slate-900/40'
                     : currentView === 'control-escolar' || currentView === 'alumnos' || currentView === 'ciclo-escolar' || currentView === 'materias' || currentView === 'maestros' || currentView === 'reportes' || currentView === 'avisos'
-                    ? 'bg-slate-800/80 text-white font-medium cursor-pointer'
-                    : 'hover:bg-slate-800 hover:text-white cursor-pointer'
+                    ? 'bg-slate-800/80 text-white font-medium cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                    : 'hover:bg-slate-800 hover:text-white cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
                 }`}
               >
                 <div className="flex items-center gap-3 truncate">
-                  <ClipboardList size={20} className="shrink-0 text-blue-400" />
+                  <ClipboardList size={20} className={`shrink-0 ${!isMenuAllowed('control-escolar') ? 'text-slate-600' : 'text-blue-400'}`} />
                   <span className="font-medium truncate">Control Escolar</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {!isMenuAllowed('control-escolar') && <Lock size={14} className="text-slate-500 shrink-0" />}
-                  <span className="text-slate-400">
-                    {isControlEscolarSubOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  </span>
+                  {!isMenuAllowed('control-escolar') ? (
+                    <Lock size={14} className="text-slate-600 shrink-0" />
+                  ) : (
+                    <span className="text-slate-400">
+                      {isControlEscolarSubOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </span>
+                  )}
                 </div>
               </button>
               {isControlEscolarSubOpen && isMenuAllowed('control-escolar') && (
@@ -5534,32 +5647,40 @@ export default function App() {
             </div>
 
             {/* Maestros with submenu: Calificaciones */}
-            <div className={`space-y-1 pt-1 transition-opacity ${!isMenuAllowed('maestros') ? 'opacity-40 select-none' : ''}`}>
+            <div className={`space-y-1 pt-1 transition-opacity ${!isMenuAllowed('maestros') ? 'opacity-30 select-none' : ''}`}>
               <button 
                 onClick={() => {
                   if (isMenuAllowed('maestros')) {
                     playClickSound();
                     setIsMaestrosSubOpen(!isMaestrosSubOpen);
+                    if (sessionUser?.role === 'Maestros' || sessionUser?.role === 'Docente') {
+                      if (currentView !== 'calificaciones' && currentView !== 'avisos') {
+                        setCurrentView('calificaciones');
+                      }
+                    }
                   }
                 }}
                 disabled={!isMenuAllowed('maestros')}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left hover:scale-[1.02] active:scale-[0.98] ${
+                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left ${
                   !isMenuAllowed('maestros')
-                    ? 'cursor-not-allowed'
-                    : currentView === 'maestros' || currentView === 'calificaciones' || currentView === 'avisos'
-                    ? 'bg-slate-800/80 text-white font-medium cursor-pointer'
-                    : 'hover:bg-slate-800 hover:text-white cursor-pointer'
+                    ? 'cursor-not-allowed text-slate-500 bg-slate-900/40 hover:bg-slate-900/40'
+                    : currentView === 'calificaciones' || currentView === 'avisos'
+                    ? 'bg-slate-800/80 text-white font-medium cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                    : 'hover:bg-slate-800 hover:text-white cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
                 }`}
               >
                 <div className="flex items-center gap-3 truncate">
-                  <TeacherIcon size={20} className="shrink-0 text-indigo-400" />
+                  <TeacherIcon size={20} className={`shrink-0 ${!isMenuAllowed('maestros') ? 'text-slate-600' : 'text-indigo-400'}`} />
                   <span className="font-medium truncate">Maestros</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {!isMenuAllowed('maestros') && <Lock size={14} className="text-slate-500 shrink-0" />}
-                  <span className="text-slate-400">
-                    {isMaestrosSubOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  </span>
+                  {!isMenuAllowed('maestros') ? (
+                    <Lock size={14} className="text-slate-600 shrink-0" />
+                  ) : (
+                    <span className="text-slate-400">
+                      {isMaestrosSubOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </span>
+                  )}
                 </div>
               </button>
               {isMaestrosSubOpen && isMenuAllowed('maestros') && (
@@ -5613,17 +5734,17 @@ export default function App() {
                 }
               }}
               disabled={!isMenuAllowed('kardex-alumnos')}
-              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all text-left hover:scale-[1.02] active:scale-[0.98] ${
+              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all text-left ${
                 !isMenuAllowed('kardex-alumnos')
-                  ? 'opacity-40 cursor-not-allowed select-none'
+                  ? 'opacity-30 cursor-not-allowed select-none text-slate-500 bg-slate-900/40 hover:bg-slate-900/40'
                   : currentView === 'kardex-alumnos'
-                  ? 'bg-blue-600 text-white shadow-sm cursor-pointer'
-                  : 'hover:bg-slate-800 hover:text-white cursor-pointer'
+                  ? 'bg-blue-600 text-white shadow-sm cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
+                  : 'hover:bg-slate-800 hover:text-white cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
               }`}
             >
-              <FileText size={20} className="shrink-0 text-cyan-400" />
+              <FileText size={20} className={`shrink-0 ${!isMenuAllowed('kardex-alumnos') ? 'text-slate-600' : 'text-cyan-400'}`} />
               <span className="font-medium truncate flex-1">Kardex Alumnos</span>
-              {!isMenuAllowed('kardex-alumnos') && <Lock size={14} className="text-slate-500 shrink-0" />}
+              {!isMenuAllowed('kardex-alumnos') && <Lock size={14} className="text-slate-600 shrink-0" />}
             </button>
           </nav>
           
@@ -5911,6 +6032,44 @@ export default function App() {
         systemUsers={systemUsers}
         sheetLink={sheetLink}
         folderLink={folderLink}
+        workspaceResult={workspaceResult}
+        playClickSound={playClickSound}
+        playSuccessSound={playSuccessSound}
+      />
+
+      {/* Modal Emergente: Boletín General con las 3 opciones (Lista de alumnos, Kardex de calificaciones, Lista de asistencia) */}
+      <BoletinGeneralModal
+        isOpen={isBoletinGeneralModalOpen}
+        onClose={() => setIsBoletinGeneralModalOpen(false)}
+        institutionName={institutionName}
+        institutionLogo={institutionLogo}
+        alumnosList={alumnosList}
+        calificacionesList={calificacionesList}
+        materiasList={materiasList}
+        ciclosList={ciclosList}
+        systemUsers={systemUsers}
+        sheetLink={sheetLink}
+        folderLink={folderLink}
+        workspaceResult={workspaceResult}
+        playClickSound={playClickSound}
+        playSuccessSound={playSuccessSound}
+      />
+
+      {/* Modal Emergente: Impresión Directa de Tablas (Alumnos, Maestros, Materias) */}
+      <DirectTablePrintModal
+        isOpen={isDirectTablePrintModalOpen}
+        onClose={() => setIsDirectTablePrintModalOpen(false)}
+        type={directTablePrintType}
+        institutionName={institutionName}
+        institutionLogo={institutionLogo}
+        alumnosList={alumnosList}
+        materiasList={materiasList}
+        systemUsers={systemUsers}
+        ciclosList={ciclosList}
+        calificacionesList={calificacionesList}
+        sheetLink={sheetLink}
+        folderLink={folderLink}
+        workspaceResult={workspaceResult}
         playClickSound={playClickSound}
         playSuccessSound={playSuccessSound}
       />

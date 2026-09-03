@@ -1273,7 +1273,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
             </form>
           ) : (
             /* Printable Preview Sheet */
-            <div className="p-8 max-w-3xl mx-auto space-y-6">
+            <div id="student-sheet-print-area" className="p-8 max-w-3xl mx-auto space-y-6">
               <div className="border-2 border-slate-300 p-8 rounded-xl bg-white shadow-sm print:border-none print:shadow-none space-y-6">
                 
                 {/* Header */}

@@ -135,3 +135,46 @@
   right: -2px;
 }
 
+/* Estilos para impresión */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  #informe-print-area,
+  #informe-print-area *,
+  #boletin-print-area,
+  #boletin-print-area *,
+  #student-sheet-print-area,
+  #student-sheet-print-area *,
+  #table-print-area,
+  #table-print-area * {
+    visibility: visible !important;
+  }
+  #informe-print-area,
+  #boletin-print-area,
+  #student-sheet-print-area,
+  #table-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    display: block !important;
+  }
+  .page-break-after-always {
+    page-break-after: always;
+    break-after: page;
+  }
+  @page {
+    size: auto;
+    margin: 0.6cm 0.8cm;
+  }
+}
+
+
