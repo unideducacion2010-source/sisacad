@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, GripVertical, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck } from 'lucide-react';
+import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId, validateGoogleToken, clearInvalidToken } from './auth';
@@ -31,11 +31,6 @@ export interface SystemUser {
 
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem('sysacad_sidebar_width');
-    return saved ? Math.max(180, Math.min(480, Number(saved))) : 260;
-  });
-  const [isResizing, setIsResizing] = useState(false);
   const [currentView, setCurrentView] = useState(() => {
     const saved = localStorage.getItem('sysacad_session_user');
     if (saved) {
@@ -51,7 +46,6 @@ export default function App() {
   const [adminTab, setAdminTab] = useState<'config' | 'usuarios' | 'seguridad' | 'respaldos' | 'parametros'>('config');
   const [isControlEscolarSubOpen, setIsControlEscolarSubOpen] = useState(true);
   const [isMaestrosSubOpen, setIsMaestrosSubOpen] = useState(true);
-  const isResizingRef = useRef(false);
   const [muted, setMuted] = useState<boolean>(() => isSoundMuted());
 
   interface DuplicateWarningState {
@@ -2339,40 +2333,6 @@ export default function App() {
     setCurrentView('administrador');
     setAdminTab('config');
   };
-
-  // Resize drag handling for the sidebar
-  const startResizing = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-    isResizingRef.current = true;
-  }, []);
-
-  useEffect(() => {
-    let currentWidth = sidebarWidth;
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizingRef.current) return;
-      const newWidth = e.clientX;
-      if (newWidth >= 180 && newWidth <= 480) {
-        currentWidth = newWidth;
-        setSidebarWidth(newWidth);
-      }
-    };
-
-    const handleMouseUp = () => {
-      if (isResizingRef.current) {
-        isResizingRef.current = false;
-        setIsResizing(false);
-        localStorage.setItem('sysacad_sidebar_width', String(currentWidth));
-      }
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [sidebarWidth]);
 
   const handleInitializeStorage = async () => {
     await handleSyncWorkspace();
@@ -5481,21 +5441,17 @@ export default function App() {
           animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
           exit={{ opacity: 0, scale: 0.96, filter: 'blur(4px)' }}
           transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-          className={`flex h-screen bg-slate-50 overflow-hidden text-slate-900 font-sans selection:bg-blue-200 ${isResizing ? 'select-none cursor-col-resize' : ''}`}
+          className="flex h-screen bg-slate-50 overflow-hidden text-slate-900 font-sans selection:bg-blue-200"
         >
       
-      {/* Sidebar */}
+      {/* Sidebar - Fixed Width */}
       <aside 
-        style={{
-          width: isSidebarOpen ? `${sidebarWidth}px` : '0px',
-        }}
-        className={`bg-slate-900 text-slate-300 flex-shrink-0 flex flex-col relative z-20 overflow-hidden ${
-          isResizing ? '' : 'transition-[width] duration-300 ease-in-out'
+        className={`bg-slate-900 text-slate-300 flex-shrink-0 flex flex-col relative z-20 overflow-hidden transition-[width] duration-300 ease-in-out ${
+          isSidebarOpen ? 'w-64' : 'w-0'
         }`}
       >
         <div 
-          style={{ width: `${sidebarWidth}px` }} 
-          className="h-full flex flex-col relative shrink-0"
+          className="w-64 h-full flex flex-col relative shrink-0"
         >
           <div className="p-4 flex items-center justify-between border-b border-slate-800 shrink-0">
             <div className="flex items-center gap-3 truncate min-w-0">
@@ -5766,22 +5722,6 @@ export default function App() {
                 <LogOut size={14} />
                 <span>Cerrar Sesión</span>
               </button>
-            </div>
-          )}
-
-          {/* Barra de Movimiento / Resizer Handle */}
-          {isSidebarOpen && (
-            <div
-              id="sidebar-resizer"
-              onMouseDown={startResizing}
-              title="Arrastra para ajustar el ancho del menú"
-              className={`absolute top-0 right-0 w-2 h-full cursor-col-resize z-30 transition-colors flex items-center justify-center group ${
-                isResizing ? 'bg-blue-500' : 'hover:bg-blue-500/50 bg-slate-800/60'
-              }`}
-            >
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center -space-y-1">
-                <GripVertical size={12} className="text-white" />
-              </div>
             </div>
           )}
         </div>
