@@ -5523,7 +5523,7 @@ export default function App() {
             </button>
           </div>
           
-          <nav className="flex-1 px-3 py-5 space-y-2 overflow-y-auto overflow-x-hidden no-scrollbar">
+          <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto overflow-x-hidden sidebar-scrollbar">
             <button 
               id="nav-admin-btn"
               onClick={() => {
