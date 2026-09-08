@@ -5,7 +5,6 @@ import {
   Users, 
   Download, 
   Printer, 
-  ExternalLink, 
   FolderOpen,
   X, 
   GraduationCap, 
@@ -250,18 +249,6 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
               <FolderOpen size={13} />
               <span>Abrir</span>
             </a>
-            {sheetLink && (
-              <a 
-                href={sheetLink} 
-                target="_blank" 
-                rel="noreferrer"
-                className="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 font-medium py-1.5 px-3 rounded-lg transition-all text-xs flex items-center gap-1.5"
-                title="Abrir base de datos completa en Google Sheets"
-              >
-                <ExternalLink size={13} />
-                <span className="hidden sm:inline">Google Sheets</span>
-              </a>
-            )}
             <button 
               onClick={() => window.print()}
               className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium py-1.5 px-3 rounded-lg transition-all text-xs flex items-center gap-1.5 cursor-pointer"

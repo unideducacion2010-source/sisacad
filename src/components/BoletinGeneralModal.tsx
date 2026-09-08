@@ -5,7 +5,6 @@ import {
   ClipboardList, 
   Printer, 
   Download, 
-  ExternalLink, 
   FolderOpen,
   X, 
   Search, 
@@ -613,18 +612,6 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
               <FolderOpen size={13} />
               <span>Abrir</span>
             </a>
-            {sheetLink && (
-              <a 
-                href={sheetLink} 
-                target="_blank" 
-                rel="noreferrer"
-                className="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 font-medium py-1.5 px-3 rounded-lg transition-all text-xs flex items-center gap-1.5"
-                title="Abrir base de datos completa en Google Sheets"
-              >
-                <ExternalLink size={13} />
-                <span className="hidden sm:inline">Google Sheets</span>
-              </a>
-            )}
             <button
               onClick={onClose}
               className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer ml-1"
