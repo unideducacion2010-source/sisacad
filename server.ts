@@ -14,13 +14,18 @@ const STORE_FILE = path.join(DATA_DIR, 'system_store.json');
 const defaultStore = {
   institutionName: 'Centro Educativo Villa Montessori de Morelia',
   institutionLogo: '',
+  adminEmail: 'c.e.v.montessori@gmail.com',
+  workspaceResult: null,
+  folderLink: null,
+  reportsFolderLink: null,
+  sheetLink: null,
   systemUsers: [
     {
       id: '1',
       username: 'admin',
       password: 'admin123',
       name: 'Administrador Principal',
-      email: 'admin@sysacad.edu',
+      email: 'c.e.v.montessori@gmail.com',
       role: 'Administrador',
       status: 'Activo',
       fechaRegistro: new Date().toISOString().split('T')[0],
@@ -73,6 +78,22 @@ function saveSystemStore(newData: any) {
   const current = getSystemStore();
   const merged = { ...current, ...newData };
   
+  // Merge users safely
+  if (Array.isArray(newData.systemUsers)) {
+    const userMap = new Map();
+    if (Array.isArray(current.systemUsers)) {
+      current.systemUsers.forEach((u: any) => {
+        const key = (u.username || u.id || '').trim().toLowerCase();
+        if (key) userMap.set(key, u);
+      });
+    }
+    newData.systemUsers.forEach((u: any) => {
+      const key = (u.username || u.id || '').trim().toLowerCase();
+      if (key) userMap.set(key, u);
+    });
+    merged.systemUsers = Array.from(userMap.values());
+  }
+
   // Ensure admin user is never lost
   if (Array.isArray(merged.systemUsers)) {
     const hasAdmin = merged.systemUsers.some((u: any) => u.username?.toLowerCase() === 'admin' || u.role === 'Administrador');
