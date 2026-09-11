@@ -2210,7 +2210,11 @@ export default function App() {
   const [savedClientIdMsg, setSavedClientIdMsg] = useState(false);
 
   const [institutionName, setInstitutionName] = useState<string>(() => {
-    return localStorage.getItem('sysacad_institution_name') || 'Centro Educativo Villa Montessori';
+    const saved = localStorage.getItem('sysacad_institution_name');
+    if (!saved || saved === 'SysAcad' || saved === 'Centro Educativo Villa Montessori') {
+      return 'Centro Educativo Villa Montessori de Morelia';
+    }
+    return saved;
   });
   const [savedInstitutionNameMsg, setSavedInstitutionNameMsg] = useState(false);
   const [institutionLogo, setInstitutionLogo] = useState<string>(() => {
@@ -4414,17 +4418,17 @@ export default function App() {
                             <span className="text-[11px] text-slate-400 font-medium self-center mr-1">Opciones rápidas:</span>
                             <button
                               type="button"
+                              onClick={() => handleInstitutionNameChange('Centro Educativo Villa Montessori de Morelia')}
+                              className="text-[11px] px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-bold transition-colors cursor-pointer border border-blue-200"
+                            >
+                              Centro Educativo Villa Montessori de Morelia
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => handleInstitutionNameChange('Centro Educativo Villa Montessori')}
                               className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-lg font-medium transition-colors cursor-pointer border border-slate-200"
                             >
                               Villa Montessori
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleInstitutionNameChange('Colegio Villa Montessori de Morelia')}
-                              className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-lg font-medium transition-colors cursor-pointer border border-slate-200"
-                            >
-                              Villa Montessori Morelia
                             </button>
                             <button
                               type="button"
@@ -4441,13 +4445,13 @@ export default function App() {
                           <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2">
                             Vista Previa en Ventana de Inicio de Sesión
                           </p>
-                          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs font-bold uppercase tracking-wider">
-                            <School size={15} className="text-blue-400" />
-                            <span>{institutionName || 'Centro Educativo Villa Montessori'}</span>
+                          <h4 className="text-base sm:text-lg font-extrabold text-white tracking-tight leading-snug px-2 break-words">
+                            {institutionName || 'Centro Educativo Villa Montessori de Morelia'}
+                          </h4>
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-[11px] font-bold uppercase tracking-wider mt-2">
+                            <School size={13} className="text-blue-400" />
+                            <span>SysAcad • Control Escolar y Académico</span>
                           </div>
-                          <p className="text-[11px] text-slate-400 mt-2">
-                            Portal Institucional de {institutionName || 'la Institución'}
-                          </p>
                         </div>
 
                         <div>
@@ -5341,8 +5345,8 @@ export default function App() {
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] -z-10 opacity-30" />
 
           {/* Brand Header */}
-          <div className="flex flex-col items-center mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="relative bg-blue-600 text-white p-3 rounded-2xl shadow-xl shadow-blue-600/10 mb-3 border border-blue-500/20 flex items-center justify-center overflow-hidden w-16 h-16">
+          <div className="flex flex-col items-center mb-6 sm:mb-8 text-center px-4 animate-in fade-in slide-in-from-top-4 duration-500 w-full max-w-xl">
+            <div className="relative bg-blue-600 text-white p-3 rounded-2xl shadow-xl shadow-blue-600/10 mb-3 border border-blue-500/20 flex items-center justify-center overflow-hidden w-16 h-16 sm:w-20 sm:h-20 shrink-0">
               {institutionLogo ? (
                 <img src={institutionLogo} alt="Logo" className="w-full h-full object-contain rounded-xl" referrerPolicy="no-referrer" />
               ) : (
@@ -5350,13 +5354,16 @@ export default function App() {
               )}
               <div className="logo-star">✦</div>
             </div>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">SysAcad</h1>
-            <p className="text-slate-400 text-sm font-medium mt-1">Sistema de Administración Académica y Control Escolar</p>
             
-            {/* Prominent Institution Name Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs sm:text-sm font-bold mt-3 uppercase tracking-wider shadow-sm text-center">
-              <School size={15} className="text-blue-400 shrink-0" />
-              <span className="truncate max-w-[280px] sm:max-w-md">{institutionName || 'Centro Educativo Villa Montessori'}</span>
+            {/* Full Institution Name as Main Display */}
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-snug px-2 break-words">
+              {institutionName || 'Centro Educativo Villa Montessori de Morelia'}
+            </h1>
+            
+            {/* Sub-Brand Badge */}
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-[11px] sm:text-xs font-bold mt-2.5 uppercase tracking-wider shadow-sm text-center">
+              <School size={14} className="text-blue-400 shrink-0" />
+              <span>SysAcad • Control Escolar y Académico</span>
             </div>
           </div>
 
