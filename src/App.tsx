@@ -1681,40 +1681,43 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const cw = canvas.width || 260;
+    const ch = canvas.height || 54;
 
-    const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, cw, ch);
+
+    const grad = ctx.createLinearGradient(0, 0, cw, ch);
     grad.addColorStop(0, '#020617');
     grad.addColorStop(0.5, '#0f172a');
     grad.addColorStop(1, '#020617');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, cw, ch);
 
     ctx.strokeStyle = '#1e293b';
     ctx.lineWidth = 1;
-    for (let x = 0; x < canvas.width; x += 12) {
+    for (let x = 0; x < cw; x += 14) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
+      ctx.lineTo(x, ch);
       ctx.stroke();
     }
-    for (let y = 0; y < canvas.height; y += 10) {
+    for (let y = 0; y < ch; y += 12) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
+      ctx.lineTo(cw, y);
       ctx.stroke();
     }
 
     const lineColors = ['#38bdf8', '#34d399', '#f43f5e', '#a855f7', '#fbbf24', '#e2e8f0'];
     for (let i = 0; i < 5; i++) {
       ctx.strokeStyle = lineColors[i % lineColors.length];
-      ctx.lineWidth = Math.random() * 1.5 + 1;
+      ctx.lineWidth = Math.random() * 1.8 + 1.2;
       ctx.beginPath();
-      ctx.moveTo(Math.random() * 20, Math.random() * canvas.height);
+      ctx.moveTo(Math.random() * 20, Math.random() * ch);
       ctx.bezierCurveTo(
-        canvas.width * 0.3, Math.random() * canvas.height,
-        canvas.width * 0.7, Math.random() * canvas.height,
-        canvas.width - Math.random() * 20, Math.random() * canvas.height
+        cw * 0.3, Math.random() * ch,
+        cw * 0.7, Math.random() * ch,
+        cw - Math.random() * 20, Math.random() * ch
       );
       ctx.stroke();
     }
@@ -1722,24 +1725,29 @@ export default function App() {
     for (let i = 0; i < 35; i++) {
       ctx.fillStyle = lineColors[Math.floor(Math.random() * lineColors.length)];
       ctx.beginPath();
-      ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 1.5 + 0.5, 0, Math.PI * 2);
+      ctx.arc(Math.random() * cw, Math.random() * ch, Math.random() * 1.6 + 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
     if (code) {
-      const charWidth = (canvas.width - 24) / code.length;
+      const paddingLeft = 16;
+      const paddingRight = 16;
+      const availableWidth = cw - paddingLeft - paddingRight;
+      const charWidth = availableWidth / code.length;
       for (let i = 0; i < code.length; i++) {
         const char = code[i];
         ctx.save();
-        const x = 16 + i * charWidth + (Math.random() * 4 - 2);
-        const y = 30 + (Math.random() * 6 - 3);
-        const angle = (Math.random() * 28 - 14) * (Math.PI / 180);
+        const x = paddingLeft + (i + 0.5) * charWidth + (Math.random() * 4 - 2);
+        const y = ch / 2 + (Math.random() * 4 - 2);
+        const angle = (Math.random() * 24 - 12) * (Math.PI / 180);
         ctx.translate(x, y);
         ctx.rotate(angle);
-        ctx.font = `bold ${Math.floor(22 + Math.random() * 4)}px monospace`;
+        ctx.font = `bold ${Math.floor(26 + Math.random() * 4)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.fillStyle = lineColors[i % lineColors.length];
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-        ctx.shadowBlur = 4;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+        ctx.shadowBlur = 5;
         ctx.fillText(char, 0, 0);
         ctx.restore();
       }
@@ -5387,18 +5395,23 @@ export default function App() {
 
                 {/* CAPTCHA Section */}
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                    <span>Código de Seguridad</span>
-                    <span className="text-[10px] text-blue-400 font-semibold lowercase">imagen captcha</span>
-                  </label>
-                  <div className="flex gap-4 items-stretch h-[60px]">
-                    <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-1 flex items-center justify-between shadow-inner relative group overflow-hidden">
-                      <div className="flex-1 flex items-center justify-center">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-bold uppercase tracking-wider text-slate-400">
+                      Código de Seguridad
+                    </label>
+                    <span className="text-[10px] text-blue-400 font-semibold lowercase">
+                      imagen captcha
+                    </span>
+                  </div>
+                  <div className="flex gap-2.5 items-stretch h-[56px] sm:h-[60px]">
+                    {/* Large Image Captcha Box */}
+                    <div className="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-xl p-1 flex items-center justify-between shadow-inner relative group overflow-hidden">
+                      <div className="flex-1 min-w-0 h-full flex items-center justify-center overflow-hidden">
                         <canvas
                           ref={captchaCanvasRef}
-                          width={180}
-                          height={46}
-                          className="rounded-lg shadow-sm border border-slate-800/80 bg-slate-950 cursor-pointer transition-opacity group-hover:opacity-90 block"
+                          width={260}
+                          height={54}
+                          className="w-full h-full max-h-[50px] object-contain rounded-lg shadow-sm bg-slate-950 cursor-pointer transition-opacity group-hover:opacity-90 block"
                           onClick={() => {
                             playClickSound();
                             generateCaptcha();
@@ -5418,15 +5431,20 @@ export default function App() {
                         <RefreshCw size={16} />
                       </button>
                     </div>
-                    <div className="metallic-ring-wrapper shrink-0 w-32">
+
+                    {/* Compact Code Input Box */}
+                    <div className="metallic-ring-wrapper shrink-0 w-20 sm:w-24">
                       <input
                         type="text"
                         required
-                        maxLength={5}
+                        maxLength={6}
                         placeholder="Código"
                         value={loginCaptchaInput}
-                        onChange={(e) => setLoginCaptchaInput(e.target.value)}
-                        className="metallic-ring-content w-full h-full text-center px-2 text-sm font-extrabold uppercase tracking-widest text-white transition-all placeholder:text-slate-600"
+                        onChange={(e) => setLoginCaptchaInput(e.target.value.toUpperCase())}
+                        className="metallic-ring-content w-full h-full text-center px-1 text-sm sm:text-base font-extrabold uppercase font-mono tracking-wider text-white transition-all placeholder:text-slate-600 overflow-x-auto whitespace-nowrap"
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck="false"
                       />
                     </div>
                   </div>
