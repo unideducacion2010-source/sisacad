@@ -19,6 +19,7 @@ const defaultStore = {
   folderLink: null,
   reportsFolderLink: null,
   sheetLink: null,
+  customClientId: '',
   systemUsers: [
     {
       id: '1',

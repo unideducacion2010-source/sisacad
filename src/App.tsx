@@ -268,6 +268,14 @@ export default function App() {
           } catch(e) {}
         }
 
+        const localCustomClientId = localStorage.getItem('sysacad_custom_google_client_id');
+        if (serverData.customClientId && serverData.customClientId.trim()) {
+          setCustomClientId(serverData.customClientId.trim());
+          setCustomClientIdInput(serverData.customClientId.trim());
+        } else if (localCustomClientId && localCustomClientId.trim()) {
+          payloadToSync.customClientId = localCustomClientId.trim();
+        }
+
         if (Object.keys(payloadToSync).length > 0) {
           syncSystemStoreToServer(payloadToSync);
         }
@@ -2661,7 +2669,9 @@ export default function App() {
 
   const handleSaveCustomClientId = (e: React.FormEvent) => {
     e.preventDefault();
-    setCustomClientId(customClientIdInput.trim());
+    const cleanId = customClientIdInput.trim();
+    setCustomClientId(cleanId);
+    syncSystemStoreToServer({ customClientId: cleanId });
     setSavedClientIdMsg(true);
     setTimeout(() => setSavedClientIdMsg(false), 3000);
   };
