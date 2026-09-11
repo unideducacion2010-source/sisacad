@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound, UploadCloud } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive, searchDriveFiles } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId, validateGoogleToken, clearInvalidToken } from './auth';
@@ -1056,14 +1056,30 @@ export default function App() {
     setSystemUsers(updatedList);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedList));
     syncUsersToServer(updatedList);
+    syncSystemStoreToServer({ systemUsers: updatedList });
     setIsMaestroModalOpen(false);
 
-    if (token && workspaceResult?.spreadsheetId) {
-      try {
-        await syncUsersToSheet(token, workspaceResult.spreadsheetId, updatedList);
-      } catch (err) {
-        console.warn('Could not auto-sync teachers to sheet:', err);
+    let activeToken = token || localStorage.getItem('sysacad_google_access_token');
+    let activeSheetId = workspaceResult?.spreadsheetId;
+    if (!activeSheetId) {
+      const savedRaw = localStorage.getItem('sysacad_workspace_result');
+      if (savedRaw) {
+        try { activeSheetId = JSON.parse(savedRaw)?.spreadsheetId; } catch(e) {}
       }
+    }
+
+    if (activeToken && activeSheetId) {
+      try {
+        await syncUsersToSheet(activeToken, activeSheetId, updatedList);
+        playSuccessSound();
+        alert('✅ Maestro registrado exitosamente y sincronizado en Google Sheets.');
+      } catch (err: any) {
+        console.warn('Could not auto-sync teachers to sheet:', err);
+        alert('⚠️ Maestro guardado en el dispositivo, pero hubo un detalle con Google Sheets: ' + (err.message || 'Error de sincronización'));
+      }
+    } else {
+      playSuccessSound();
+      alert('ℹ️ Maestro guardado en la memoria de este dispositivo.\n\n⚠️ AVISO: Google Drive y Sheets no están vinculados en este dispositivo. Para que este maestro se refleje en tu PC y en la nube, pulsa el botón "Vincular Google Drive & Sheets" en la barra superior.');
     }
   };
 
@@ -1073,6 +1089,7 @@ export default function App() {
       setSystemUsers(updated);
       localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
       syncUsersToServer(updated);
+      syncSystemStoreToServer({ systemUsers: updated });
       if (token && workspaceResult?.spreadsheetId) {
         syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
       }
@@ -1722,18 +1739,50 @@ export default function App() {
     syncSystemStoreToServer({ systemUsers: updatedList });
     setIsUserModalOpen(false);
 
-    // Sync to Google Sheets if connected
-    if (token && workspaceResult?.spreadsheetId) {
-      try {
-        await syncUsersToSheet(token, workspaceResult.spreadsheetId, updatedList);
-      } catch (err) {
-        console.warn('Could not auto-sync users to sheet:', err);
+    let activeToken = token || localStorage.getItem('sysacad_google_access_token');
+    let activeSheetId = workspaceResult?.spreadsheetId;
+    if (!activeSheetId) {
+      const savedRaw = localStorage.getItem('sysacad_workspace_result');
+      if (savedRaw) {
+        try { activeSheetId = JSON.parse(savedRaw)?.spreadsheetId; } catch(e) {}
       }
+    }
+
+    if (!activeSheetId && activeToken) {
+      try {
+        const found = await searchDriveFiles(activeToken, "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and (name contains 'SysAcad' or name contains 'Base de Datos Central')");
+        if (found.files && found.files.length > 0) {
+          activeSheetId = found.files[0].id;
+          const discovered = {
+            spreadsheetId: activeSheetId,
+            spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${activeSheetId}`,
+            rootFolderId: '', rootFolderUrl: '', cycleFolderId: '', cycleFolderUrl: '', cycleFolderName: 'Ciclo Actual', subfolders: []
+          };
+          setWorkspaceResult(discovered);
+          setSheetLink(discovered.spreadsheetUrl);
+          localStorage.setItem('sysacad_workspace_result', JSON.stringify(discovered));
+          localStorage.setItem('sysacad_sheet_link', discovered.spreadsheetUrl);
+        }
+      } catch(e) {}
+    }
+
+    if (activeToken && activeSheetId) {
+      try {
+        await syncUsersToSheet(activeToken, activeSheetId, updatedList);
+        playSuccessSound();
+        alert('✅ ¡Usuario guardado exitosamente y sincronizado en Google Sheets (pestaña Usuarios_Sistema)!');
+      } catch (err: any) {
+        console.warn('Could not auto-sync users to sheet:', err);
+        alert('⚠️ Usuario guardado localmente, pero hubo un error de conexión con Google Sheets: ' + (err.message || 'Error de sincronización'));
+      }
+    } else {
+      playSuccessSound();
+      alert('ℹ️ Usuario registrado en la memoria de este dispositivo.\n\n⚠️ AVISO IMPORTANTE: Google Drive y Sheets no están vinculados en este dispositivo (móvil/PC).\n\nPara que este usuario se guarde en la nube central y aparezca en tu PC, pulsa el botón "Vincular Google Drive & Sheets" que aparece en la barra superior.');
     }
   };
 
   const handleManualSyncUsers = async () => {
-    let activeToken = token;
+    let activeToken = token || localStorage.getItem('sysacad_google_access_token');
     if (!activeToken) {
       setIsLoggingIn(true);
       try {
@@ -1743,8 +1792,9 @@ export default function App() {
           setToken(authRes.accessToken);
           setUser(authRes.user);
           setNeedsAuth(false);
+          if (authRes.user.email) handleAdminEmailChange(authRes.user.email);
         } else {
-          alert('Para sincronizar con Google Sheets, inicia sesión con Google.');
+          alert('Para sincronizar con Google Sheets, autoriza la conexión con Google.');
           return;
         }
       } catch (err: any) {
@@ -1755,10 +1805,41 @@ export default function App() {
       }
     }
 
-    const sheetId = workspaceResult?.spreadsheetId || (localStorage.getItem('sysacad_workspace_result') ? JSON.parse(localStorage.getItem('sysacad_workspace_result') || '{}')?.spreadsheetId : null);
+    let sheetId = workspaceResult?.spreadsheetId;
+    if (!sheetId) {
+      const savedRaw = localStorage.getItem('sysacad_workspace_result');
+      if (savedRaw) {
+        try { sheetId = JSON.parse(savedRaw)?.spreadsheetId; } catch(e) {}
+      }
+    }
+
+    if (!sheetId && activeToken) {
+      setIsSyncingUsers(true);
+      try {
+        const driveSearch = await searchDriveFiles(activeToken, "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and (name contains 'SysAcad' or name contains 'Base de Datos Central')");
+        if (driveSearch.files && driveSearch.files.length > 0) {
+          sheetId = driveSearch.files[0].id;
+          const discovered = {
+            spreadsheetId: sheetId,
+            spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${sheetId}`,
+            rootFolderId: '', rootFolderUrl: '', cycleFolderId: '', cycleFolderUrl: '', cycleFolderName: 'Ciclo Actual', subfolders: []
+          };
+          setWorkspaceResult(discovered);
+          setSheetLink(discovered.spreadsheetUrl);
+          localStorage.setItem('sysacad_workspace_result', JSON.stringify(discovered));
+          localStorage.setItem('sysacad_sheet_link', discovered.spreadsheetUrl);
+        } else {
+          await handleSyncWorkspace(activeToken);
+          return;
+        }
+      } catch(e) {
+        console.warn('Drive search error:', e);
+      }
+    }
 
     if (!sheetId) {
-      alert('Para sincronizar con Google Sheets, primero ve a Configuración & Almacenamiento y haz clic en "Sincronizar Estructura Completa".');
+      alert('Iniciando vinculación y estructura en Google Drive...');
+      await handleSyncWorkspace(activeToken);
       return;
     }
 
@@ -1766,8 +1847,9 @@ export default function App() {
     try {
       await syncUsersToSheet(activeToken, sheetId, systemUsers);
       syncUsersToServer(systemUsers);
+      syncSystemStoreToServer({ systemUsers });
       playSuccessSound();
-      alert('¡Usuarios y credenciales sincronizados exitosamente en la pestaña "Usuarios_Sistema" de Google Sheets y en el servidor!');
+      alert('¡Todos los usuarios fueron sincronizados y respaldados exitosamente en la pestaña "Usuarios_Sistema" de Google Sheets y en el servidor!');
     } catch (err: any) {
       alert('Error al sincronizar usuarios con Google Sheets: ' + (err.message || 'Error de conexión'));
     } finally {
@@ -1776,7 +1858,7 @@ export default function App() {
   };
 
   const handleImportUsersFromSheet = async () => {
-    let activeToken = token;
+    let activeToken = token || localStorage.getItem('sysacad_google_access_token');
     if (!activeToken) {
       setIsLoggingIn(true);
       try {
@@ -1786,8 +1868,9 @@ export default function App() {
           setToken(authRes.accessToken);
           setUser(authRes.user);
           setNeedsAuth(false);
+          if (authRes.user.email) handleAdminEmailChange(authRes.user.email);
         } else {
-          alert('Para cargar usuarios desde Google Sheets, inicia sesión con Google.');
+          alert('Para cargar usuarios desde Google Sheets, autoriza la conexión con Google.');
           return;
         }
       } catch (err: any) {
@@ -1798,10 +1881,41 @@ export default function App() {
       }
     }
 
-    const sheetId = workspaceResult?.spreadsheetId || (localStorage.getItem('sysacad_workspace_result') ? JSON.parse(localStorage.getItem('sysacad_workspace_result') || '{}')?.spreadsheetId : null);
+    let sheetId = workspaceResult?.spreadsheetId;
+    if (!sheetId) {
+      const savedRaw = localStorage.getItem('sysacad_workspace_result');
+      if (savedRaw) {
+        try { sheetId = JSON.parse(savedRaw)?.spreadsheetId; } catch(e) {}
+      }
+    }
+
+    if (!sheetId && activeToken) {
+      setIsSyncingUsers(true);
+      try {
+        const driveSearch = await searchDriveFiles(activeToken, "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and (name contains 'SysAcad' or name contains 'Base de Datos Central')");
+        if (driveSearch.files && driveSearch.files.length > 0) {
+          sheetId = driveSearch.files[0].id;
+          const discovered = {
+            spreadsheetId: sheetId,
+            spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${sheetId}`,
+            rootFolderId: '', rootFolderUrl: '', cycleFolderId: '', cycleFolderUrl: '', cycleFolderName: 'Ciclo Actual', subfolders: []
+          };
+          setWorkspaceResult(discovered);
+          setSheetLink(discovered.spreadsheetUrl);
+          localStorage.setItem('sysacad_workspace_result', JSON.stringify(discovered));
+          localStorage.setItem('sysacad_sheet_link', discovered.spreadsheetUrl);
+        } else {
+          await handleSyncWorkspace(activeToken);
+          return;
+        }
+      } catch(e) {
+        console.warn('Drive search error:', e);
+      }
+    }
 
     if (!sheetId) {
-      alert('Aún no se ha vinculado una hoja de Google Sheets. Ve a Configuración & Almacenamiento y sincroniza la estructura.');
+      alert('Aún no se ha vinculado una hoja de Google Sheets. Iniciando vinculación...');
+      await handleSyncWorkspace(activeToken);
       return;
     }
 
@@ -1810,13 +1924,18 @@ export default function App() {
       const fetched = await fetchUsersFromSheets(activeToken, sheetId);
       if (fetched && fetched.length > 0) {
         const mergedMap = new Map<string, SystemUser>();
+        // Keep existing local users
+        systemUsers.forEach(u => {
+          const key = (u.username || u.id).trim().toLowerCase();
+          mergedMap.set(key, u);
+        });
         // Ensure admin user exists
         const adminUser = systemUsers.find(u => u.username.toLowerCase() === 'admin') || {
           id: '1',
           username: 'admin',
           password: 'admin123',
           name: 'Administrador Principal',
-          email: 'c.e.v.montessori@gmail.com',
+          email: adminEmail || 'c.e.v.montessori@gmail.com',
           role: 'Administrador' as const,
           status: 'Activo' as const,
           fechaRegistro: new Date().toISOString().split('T')[0],
@@ -1829,17 +1948,23 @@ export default function App() {
         // Merge fetched users
         fetched.forEach((u: SystemUser) => {
           const key = (u.username || u.id).trim().toLowerCase();
-          mergedMap.set(key, u);
+          const existing = mergedMap.get(key);
+          if (existing) {
+            mergedMap.set(key, { ...existing, ...u });
+          } else {
+            mergedMap.set(key, u);
+          }
         });
 
         const updated = Array.from(mergedMap.values());
         setSystemUsers(updated);
         localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
         syncUsersToServer(updated);
+        syncSystemStoreToServer({ systemUsers: updated });
         playSuccessSound();
-        alert(`¡Se cargaron y sincronizaron ${fetched.length} usuarios exitosamente desde la hoja "Usuarios_Sistema" de Google Sheets!`);
+        alert(`¡Se descargaron y sincronizaron ${fetched.length} usuarios exitosamente desde la hoja "Usuarios_Sistema" de Google Sheets! Todos los dispositivos están actualizados.`);
       } else {
-        alert('No se encontraron filas de usuarios en la pestaña "Usuarios_Sistema" de Google Sheets.');
+        alert('No se encontraron usuarios adicionales en la pestaña "Usuarios_Sistema" de Google Sheets.');
       }
     } catch (err: any) {
       console.error('Error importing users from Google Sheets:', err);
@@ -2916,6 +3041,64 @@ export default function App() {
     );
     return () => unsubscribe();
   }, []);
+
+  // Live multi-device synchronization: Pull latest users from Google Sheets & server store on window focus, tab visibility, or timer
+  useEffect(() => {
+    let intervalId: any;
+    const syncLatestUsersFromCloud = async () => {
+      const activeToken = token || localStorage.getItem('sysacad_google_access_token');
+      const wsRaw = localStorage.getItem('sysacad_workspace_result');
+      const currentSheetId = workspaceResult?.spreadsheetId || (wsRaw ? JSON.parse(wsRaw)?.spreadsheetId : null);
+
+      if (activeToken && currentSheetId) {
+        try {
+          const fetched = await fetchUsersFromSheets(activeToken, currentSheetId);
+          if (Array.isArray(fetched) && fetched.length > 0) {
+            setSystemUsers(prev => {
+              const mergedMap = new Map<string, SystemUser>();
+              prev.forEach(u => mergedMap.set((u.username || u.id).trim().toLowerCase(), u));
+              let hasNew = false;
+              fetched.forEach(u => {
+                const k = (u.username || u.id).trim().toLowerCase();
+                if (!mergedMap.has(k)) {
+                  hasNew = true;
+                }
+                mergedMap.set(k, { ...(mergedMap.get(k) || {}), ...u });
+              });
+              if (!hasNew && mergedMap.size === prev.length) {
+                return prev;
+              }
+              const updated = Array.from(mergedMap.values());
+              localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
+              return updated;
+            });
+          }
+        } catch (err) {
+          // Silent background catch
+        }
+      }
+    };
+
+    const handleWindowFocus = () => {
+      syncLatestUsersFromCloud();
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        syncLatestUsersFromCloud();
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    intervalId = setInterval(syncLatestUsersFromCloud, 10000); // 10-second automatic background poll
+
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [token, workspaceResult]);
 
   // Auto sync data to Google Sheets when records are updated in any menu
   useEffect(() => {
@@ -5050,38 +5233,14 @@ export default function App() {
                       </div>
 
                       {token && user?.email ? (
-                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                            <span>Sesión de Google Activa: <strong>{user.email}</strong></span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleGoogleSignInFlow}
-                            disabled={isLoggingIn}
-                            className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-100 hover:bg-blue-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
-                          >
-                            Renovar Permisos
-                          </button>
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                          <span>Sesión de Google Activa: <strong>{user.email}</strong></span>
                         </div>
                       ) : (
-                        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-2">
-                          <div className="flex items-center gap-2 font-bold text-amber-900">
-                            <AlertTriangle size={16} className="text-amber-600 shrink-0" />
-                            <span>Autorización de Google requerida</span>
-                          </div>
-                          <p className="text-slate-600 leading-relaxed">
-                            Vincula tu cuenta de Google para otorgar permisos a SysAcad de crear carpetas en Drive y tablas en Sheets.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={handleGoogleSignInFlow}
-                            disabled={isLoggingIn}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                          >
-                            {isLoggingIn ? <Loader2 className="animate-spin" size={14} /> : <ExternalLink size={14} />}
-                            <span>Vincular Cuenta de Google (Drive & Sheets)</span>
-                          </button>
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center gap-2">
+                          <CheckCircle2 size={16} className="text-slate-400 shrink-0" />
+                          <span>Listo para vincular con el botón de sincronización de abajo.</span>
                         </div>
                       )}
                     </div>
@@ -5089,22 +5248,9 @@ export default function App() {
                     {/* Card 2: Estado de la Base de Datos y Enlaces */}
                     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
                       {status.type === 'error' && (
-                        <div className="bg-red-50 text-red-800 p-4 rounded-xl border border-red-200 text-sm space-y-2.5">
-                          <div className="flex items-start gap-2">
-                            <ShieldAlert size={18} className="shrink-0 text-red-600 mt-0.5" />
-                            <span className="leading-snug">{status.message}</span>
-                          </div>
-                          <div className="pt-1">
-                            <button
-                              type="button"
-                              onClick={handleGoogleSignInFlow}
-                              disabled={isLoggingIn}
-                              className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs py-2 px-4 rounded-lg transition-colors cursor-pointer shadow-xs disabled:opacity-50"
-                            >
-                              <RefreshCw size={14} />
-                              <span>Vincular / Reconectar con Google Ahora</span>
-                            </button>
-                          </div>
+                        <div className="bg-red-50 text-red-800 p-4 rounded-xl border border-red-200 text-sm flex items-start gap-2">
+                          <ShieldAlert size={18} className="shrink-0 text-red-600 mt-0.5" />
+                          <span className="leading-snug">{status.message}</span>
                         </div>
                       )}
                       
@@ -5121,13 +5267,7 @@ export default function App() {
                       <div className="grid gap-3">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!token) {
-                              handleGoogleSignInFlow();
-                            } else {
-                              handleSyncWorkspace();
-                            }
-                          }}
+                          onClick={() => handleSyncWorkspace()}
                           disabled={isWorkspaceSyncing || isLoggingIn}
                           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2.5 cursor-pointer text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -5138,12 +5278,12 @@ export default function App() {
                           )}
                           <span>
                             {isLoggingIn
-                              ? 'Autenticando con Google...'
+                              ? 'Vinculando y autenticando con Google...'
                               : isWorkspaceSyncing
-                              ? 'Sincronizando Estructura...'
+                              ? 'Sincronizando todo en automático...'
                               : !token
-                              ? 'Vincular Cuenta de Google y Sincronizar'
-                              : 'Sincronizar Estructura Completa (Drive & Sheets)'}
+                              ? 'Vincular y Sincronizar en Automático (Drive & Sheets)'
+                              : 'Sincronizar en Automático (Drive & Sheets)'}
                           </span>
                         </button>
 
@@ -5359,15 +5499,13 @@ export default function App() {
                         <p className="text-xs text-slate-500">Altas, bajas, contraseñas y sincronización con Google Sheets (Usuarios_Sistema)</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleOpenCreateUser}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer text-sm"
-                      >
-                        <Plus size={18} />
-                        <span>Nuevo Usuario (Alta)</span>
-                      </button>
-                    </div>
+                    <button
+                      onClick={handleOpenCreateUser}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer text-sm"
+                    >
+                      <Plus size={18} />
+                      <span>Nuevo Usuario (Alta)</span>
+                    </button>
                   </div>
 
                   {/* Summary Stats */}
@@ -6694,7 +6832,7 @@ export default function App() {
             )}
           </div>
         </header>
-        
+
         <main className="flex-1 overflow-y-auto p-6 md:p-8">
           <AnimatePresence mode="wait">
             <motion.div

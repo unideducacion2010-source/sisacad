@@ -10,15 +10,12 @@
     {
       "id": "1",
       "username": "admin",
-      "password": "admin123",
-      "name": "Administrador Principal",
-      "email": "c.e.v.montessori@gmail.com",
-      "role": "Administrador",
-      "status": "Activo",
-      "fechaRegistro": "2026-09-11",
-      "lastAccess": "Reciente",
-      "mustChangePassword": false,
-      "firstLogin": false
+      "name": "Admin"
+    },
+    {
+      "id": "2",
+      "username": "testuser",
+      "name": "Test User"
     }
   ],
   "alumnosList": [],
