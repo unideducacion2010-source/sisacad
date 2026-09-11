@@ -3042,10 +3042,58 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Live multi-device synchronization: Pull latest users from Google Sheets & server store on window focus, tab visibility, or timer
+  // Live multi-device synchronization: Pull latest users and data from server store & Google Sheets on window focus, tab visibility, or timer
   useEffect(() => {
     let intervalId: any;
     const syncLatestUsersFromCloud = async () => {
+      // 1. Always poll central server store so mobile and PC stay 100% in sync
+      try {
+        const res = await fetch('/api/system-store');
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.success && json?.data) {
+            const data = json.data;
+            if (Array.isArray(data.systemUsers) && data.systemUsers.length > 0) {
+              setSystemUsers(prev => {
+                const mergedMap = new Map<string, SystemUser>();
+                prev.forEach(u => mergedMap.set((u.username || u.id).trim().toLowerCase(), u));
+                let hasChanges = false;
+                data.systemUsers.forEach((u: SystemUser) => {
+                  const k = (u.username || u.id).trim().toLowerCase();
+                  if (!mergedMap.has(k)) {
+                    hasChanges = true;
+                    mergedMap.set(k, u);
+                  }
+                });
+                if (!hasChanges && mergedMap.size === prev.length) return prev;
+                const updated = Array.from(mergedMap.values());
+                localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
+                return updated;
+              });
+            }
+            if (data.workspaceResult && !workspaceResult) {
+              setWorkspaceResult(data.workspaceResult);
+              localStorage.setItem('sysacad_workspace_result', JSON.stringify(data.workspaceResult));
+            }
+            if (data.folderLink && !folderLink) {
+              setFolderLink(data.folderLink);
+              localStorage.setItem('sysacad_folder_link', data.folderLink);
+            }
+            if (data.sheetLink && !sheetLink) {
+              setSheetLink(data.sheetLink);
+              localStorage.setItem('sysacad_sheet_link', data.sheetLink);
+            }
+            if (data.reportsFolderLink && !reportsFolderLink) {
+              setReportsFolderLink(data.reportsFolderLink);
+              localStorage.setItem('sysacad_reports_folder_link', data.reportsFolderLink);
+            }
+          }
+        }
+      } catch (err) {
+        // Silent catch for background poll
+      }
+
+      // 2. If Google token & sheetId are active, also sync with Google Sheets
       const activeToken = token || localStorage.getItem('sysacad_google_access_token');
       const wsRaw = localStorage.getItem('sysacad_workspace_result');
       const currentSheetId = workspaceResult?.spreadsheetId || (wsRaw ? JSON.parse(wsRaw)?.spreadsheetId : null);
@@ -3070,6 +3118,8 @@ export default function App() {
               }
               const updated = Array.from(mergedMap.values());
               localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
+              syncUsersToServer(updated);
+              syncSystemStoreToServer({ systemUsers: updated });
               return updated;
             });
           }
@@ -3091,14 +3141,14 @@ export default function App() {
 
     window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    intervalId = setInterval(syncLatestUsersFromCloud, 10000); // 10-second automatic background poll
+    intervalId = setInterval(syncLatestUsersFromCloud, 5000); // 5-second automatic background poll
 
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (intervalId) clearInterval(intervalId);
     };
-  }, [token, workspaceResult]);
+  }, [token, workspaceResult, folderLink, sheetLink, reportsFolderLink]);
 
   // Auto sync data to Google Sheets when records are updated in any menu
   useEffect(() => {
@@ -5248,9 +5298,40 @@ export default function App() {
                     {/* Card 2: Estado de la Base de Datos y Enlaces */}
                     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
                       {status.type === 'error' && (
-                        <div className="bg-red-50 text-red-800 p-4 rounded-xl border border-red-200 text-sm flex items-start gap-2">
-                          <ShieldAlert size={18} className="shrink-0 text-red-600 mt-0.5" />
-                          <span className="leading-snug">{status.message}</span>
+                        <div className="bg-red-50 text-red-800 p-4 rounded-xl border border-red-200 text-sm space-y-3">
+                          <div className="flex items-start gap-2">
+                            <ShieldAlert size={18} className="shrink-0 text-red-600 mt-0.5" />
+                            <span className="leading-snug font-medium">{status.message}</span>
+                          </div>
+                          {status.message.includes('origin_mismatch') && (
+                            <div className="p-3 bg-white rounded-lg border border-red-200 text-xs text-slate-700 space-y-2">
+                              <p className="font-semibold text-slate-900">Origen actual de este dispositivo:</p>
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 bg-slate-100 px-2 py-1.5 rounded font-mono text-[11px] text-blue-700 select-all break-all border border-slate-200">
+                                  {typeof window !== 'undefined' ? window.location.origin : ''}
+                                </code>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (typeof window !== 'undefined') {
+                                      navigator.clipboard.writeText(window.location.origin);
+                                      playSuccessSound();
+                                      alert('¡Origen copiado al portapapeles! Pégalo en Google Cloud Console > Credenciales > Tu ID de Cliente OAuth > Orígenes de JavaScript autorizados.');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-xs shrink-0 cursor-pointer"
+                                >
+                                  Copiar
+                                </button>
+                              </div>
+                              <p className="text-[11px] text-slate-600 leading-relaxed">
+                                <strong>Cómo resolverlo:</strong> En tu Google Cloud Console, ve a <em>APIs y Servicios &gt; Credenciales &gt; ID de cliente OAuth 2.0</em> y agrega la URL copiada en <strong>"Orígenes de JavaScript autorizados"</strong>.
+                              </p>
+                              <div className="mt-1 pt-1.5 border-t border-slate-100 text-[11px] text-emerald-700 font-medium">
+                                💡 <strong>Aviso:</strong> Si ya vinculaste Google Workspace en tu computadora, la base de datos central ya sincroniza usuarios, alumnos y calificaciones entre celular y PC en tiempo real sin requerir volver a vincular en este dispositivo.
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       
