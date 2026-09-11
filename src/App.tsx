@@ -2210,8 +2210,9 @@ export default function App() {
   const [savedClientIdMsg, setSavedClientIdMsg] = useState(false);
 
   const [institutionName, setInstitutionName] = useState<string>(() => {
-    return localStorage.getItem('sysacad_institution_name') || 'SysAcad';
+    return localStorage.getItem('sysacad_institution_name') || 'Centro Educativo Villa Montessori';
   });
+  const [savedInstitutionNameMsg, setSavedInstitutionNameMsg] = useState(false);
   const [institutionLogo, setInstitutionLogo] = useState<string>(() => {
     return localStorage.getItem('sysacad_institution_logo') || '';
   });
@@ -2224,6 +2225,8 @@ export default function App() {
         const base64String = reader.result as string;
         setInstitutionLogo(base64String);
         localStorage.setItem('sysacad_institution_logo', base64String);
+        setSavedInstitutionNameMsg(true);
+        setTimeout(() => setSavedInstitutionNameMsg(false), 2500);
       };
       reader.readAsDataURL(file);
     }
@@ -2232,6 +2235,8 @@ export default function App() {
   const handleInstitutionNameChange = (val: string) => {
     setInstitutionName(val);
     localStorage.setItem('sysacad_institution_name', val);
+    setSavedInstitutionNameMsg(true);
+    setTimeout(() => setSavedInstitutionNameMsg(false), 2500);
   };
 
   const handleSaveCustomClientId = (e: React.FormEvent) => {
@@ -4359,28 +4364,90 @@ export default function App() {
                   <div className="w-full max-w-lg space-y-6">
                     {/* Card 0: Identidad de la Institución */}
                     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
-                      <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                          <School size={20} />
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                            <School size={20} />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-800">Identidad de la Institución</h4>
+                            <p className="text-xs text-slate-500">Personaliza el logotipo y nombre de la escuela visible en el inicio de sesión</p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-slate-800">Identidad de la Institución</h4>
-                          <p className="text-xs text-slate-500">Personaliza el logotipo y nombre de la institución</p>
-                        </div>
+                        {savedInstitutionNameMsg && (
+                          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1.5 animate-in fade-in">
+                            <CheckCircle2 size={14} /> ¡Guardado!
+                          </span>
+                        )}
                       </div>
 
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                            Nombre de la Institución
-                          </label>
-                          <input
-                            type="text"
-                            value={institutionName}
-                            onChange={(e) => handleInstitutionNameChange(e.target.value)}
-                            placeholder="ej. Colegio San Ignacio"
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                          />
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                              Nombre de la Institución / Escuela
+                            </label>
+                            <span className="text-[10px] text-blue-600 font-semibold">
+                              Aparece en inicio de sesión y reportes
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={institutionName}
+                              onChange={(e) => handleInstitutionNameChange(e.target.value)}
+                              placeholder="ej. Centro Educativo Villa Montessori"
+                              className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleInstitutionNameChange(institutionName)}
+                              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                            >
+                              <CheckCircle2 size={15} />
+                              <span>Guardar</span>
+                            </button>
+                          </div>
+
+                          {/* Quick presets */}
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            <span className="text-[11px] text-slate-400 font-medium self-center mr-1">Opciones rápidas:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleInstitutionNameChange('Centro Educativo Villa Montessori')}
+                              className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-lg font-medium transition-colors cursor-pointer border border-slate-200"
+                            >
+                              Villa Montessori
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleInstitutionNameChange('Colegio Villa Montessori de Morelia')}
+                              className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-lg font-medium transition-colors cursor-pointer border border-slate-200"
+                            >
+                              Villa Montessori Morelia
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleInstitutionNameChange('SysAcad')}
+                              className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-medium transition-colors cursor-pointer border border-slate-200"
+                            >
+                              SysAcad (Por defecto)
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Live Preview Box */}
+                        <div className="bg-slate-900 rounded-xl p-4 text-center border border-slate-800 shadow-inner">
+                          <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2">
+                            Vista Previa en Ventana de Inicio de Sesión
+                          </p>
+                          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs font-bold uppercase tracking-wider">
+                            <School size={15} className="text-blue-400" />
+                            <span>{institutionName || 'Centro Educativo Villa Montessori'}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-2">
+                            Portal Institucional de {institutionName || 'la Institución'}
+                          </p>
                         </div>
 
                         <div>
@@ -4415,13 +4482,15 @@ export default function App() {
                                   onClick={() => {
                                     setInstitutionLogo('');
                                     localStorage.removeItem('sysacad_institution_logo');
+                                    setSavedInstitutionNameMsg(true);
+                                    setTimeout(() => setSavedInstitutionNameMsg(false), 2000);
                                   }}
                                   className="ml-2 inline-flex items-center px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all cursor-pointer"
                                 >
                                   Eliminar
                                 </button>
                               )}
-                              <p className="text-[10px] text-slate-400">PNG o JPG cuadrado. Se guardará localmente.</p>
+                              <p className="text-[10px] text-slate-400">PNG o JPG cuadrado. Se guardará y mostrará en login y reportes.</p>
                             </div>
                           </div>
                         </div>
@@ -5273,15 +5342,22 @@ export default function App() {
 
           {/* Brand Header */}
           <div className="flex flex-col items-center mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="relative bg-blue-600 text-white p-3 rounded-2xl shadow-xl shadow-blue-600/10 mb-3 border border-blue-500/20">
-              <GraduationCap size={32} />
+            <div className="relative bg-blue-600 text-white p-3 rounded-2xl shadow-xl shadow-blue-600/10 mb-3 border border-blue-500/20 flex items-center justify-center overflow-hidden w-16 h-16">
+              {institutionLogo ? (
+                <img src={institutionLogo} alt="Logo" className="w-full h-full object-contain rounded-xl" referrerPolicy="no-referrer" />
+              ) : (
+                <GraduationCap size={36} />
+              )}
               <div className="logo-star">✦</div>
             </div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight">SysAcad</h1>
             <p className="text-slate-400 text-sm font-medium mt-1">Sistema de Administración Académica y Control Escolar</p>
-            {institutionName && (
-              <p className="text-blue-400 text-sm font-bold mt-2 uppercase tracking-wider">{institutionName}</p>
-            )}
+            
+            {/* Prominent Institution Name Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs sm:text-sm font-bold mt-3 uppercase tracking-wider shadow-sm text-center">
+              <School size={15} className="text-blue-400 shrink-0" />
+              <span className="truncate max-w-[280px] sm:max-w-md">{institutionName || 'Centro Educativo Villa Montessori'}</span>
+            </div>
           </div>
 
           {/* Card Main */}
@@ -5302,7 +5378,7 @@ export default function App() {
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Personal de la Institución
+                  Personal Institucional
                 </button>
                 <button
                   type="button"
@@ -5334,7 +5410,9 @@ export default function App() {
               <form onSubmit={handleLocalLoginSubmit} className="space-y-5 animate-in fade-in duration-300">
                 <div className="text-center mb-1">
                   <h2 className="text-xl font-bold text-white">Inicio de Sesión</h2>
-                  <p className="text-xs text-slate-400 mt-1">Ingrese sus credenciales de acceso</p>
+                  <p className="text-xs text-blue-400 font-semibold mt-1">
+                    Portal Institucional • {institutionName || 'SysAcad'}
+                  </p>
                 </div>
 
                 {loginError && (
@@ -5463,7 +5541,7 @@ export default function App() {
                 {/* Informative Notice regarding enrollment */}
                 <div className="pt-3 border-t border-slate-800/60 text-center text-xs text-slate-400">
                   <span className="leading-relaxed block">
-                    ℹ️ El alta e inscripción de usuarios y alumnos se gestiona internamente desde el menú de <strong>Administrador</strong> o <strong>Control Escolar</strong>.
+                    ℹ️ El alta e inscripción de usuarios y alumnos se gestiona internamente desde el menú de <strong>Administrador</strong> o <strong>Control Escolar</strong> de {institutionName || 'la institución'}.
                   </span>
                 </div>
               </form>
@@ -5478,7 +5556,7 @@ export default function App() {
                   </div>
                   <h2 className="text-lg font-extrabold text-white">Cambio de Contraseña Obligatorio</h2>
                   <p className="text-xs text-slate-400 mt-1">
-                    Es su primer inicio de sesión. Por seguridad institucional, configure una nueva contraseña.
+                    Es su primer inicio de sesión en <strong className="text-blue-400">{institutionName || 'la institución'}</strong>. Por seguridad institucional, configure una nueva contraseña.
                   </p>
                 </div>
 
