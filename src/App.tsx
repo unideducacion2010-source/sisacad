@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck } from 'lucide-react';
+import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId, validateGoogleToken, clearInvalidToken } from './auth';
@@ -9,6 +9,7 @@ import { InformesGeneralModal } from './components/InformesGeneralModal';
 import { BoletinGeneralModal } from './components/BoletinGeneralModal';
 import { CalificacionesModal } from './components/CalificacionesModal';
 import { DirectTablePrintModal, TablePrintType } from './components/DirectTablePrintModal';
+import { PasswordStrengthMeter, evaluatePasswordStrength } from './components/PasswordStrengthMeter';
 import { User } from 'firebase/auth';
 
 export interface AppUser {
@@ -27,6 +28,8 @@ export interface SystemUser {
   status: 'Activo' | 'Inactivo';
   fechaRegistro?: string;
   lastAccess: string;
+  mustChangePassword?: boolean;
+  firstLogin?: boolean;
 }
 
 export default function App() {
@@ -898,7 +901,9 @@ export default function App() {
         role: formMaestroRole,
         status: formMaestroStatus,
         fechaRegistro: new Date().toISOString().split('T')[0],
-        lastAccess: 'Nunca'
+        lastAccess: 'Nunca',
+        mustChangePassword: true,
+        firstLogin: true
       };
       updatedList = [newTeacher, ...systemUsers];
     }
@@ -1557,7 +1562,9 @@ export default function App() {
         role: formUserRole,
         status: formUserStatus,
         fechaRegistro: new Date().toISOString().split('T')[0],
-        lastAccess: 'Nunca'
+        lastAccess: 'Nunca',
+        mustChangePassword: true,
+        firstLogin: true
       };
       updatedList = [newUser, ...systemUsers];
     }
@@ -1642,7 +1649,7 @@ export default function App() {
     return null;
   });
 
-  const [loginMode, setLoginMode] = useState<'login' | 'forgot' | 'student'>('login');
+  const [loginMode, setLoginMode] = useState<'login' | 'forgot' | 'student' | 'first-login-change-password'>('login');
   
   // Login Inputs
   const [loginUsername, setLoginUsername] = useState('');
@@ -1656,6 +1663,14 @@ export default function App() {
   // Forgot Password Inputs
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+
+  // First Login Password Change Inputs
+  const [pendingChangePasswordUser, setPendingChangePasswordUser] = useState<SystemUser | null>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
 
   // Student Inputs
   const [studentName, setStudentName] = useState('');
@@ -1801,7 +1816,9 @@ export default function App() {
         email: 'admin@sysacad.edu',
         role: 'Administrador',
         status: 'Activo',
-        lastAccess: 'Ahora'
+        lastAccess: 'Ahora',
+        mustChangePassword: false,
+        firstLogin: false
       };
     }
 
@@ -1817,11 +1834,29 @@ export default function App() {
       return;
     }
 
+    // CHECK IF FIRST TIME LOGIN OR PASSWORD CHANGE REQUIRED
+    const requiresPasswordChange = Boolean(
+      foundUser.mustChangePassword || 
+      foundUser.firstLogin || 
+      (foundUser.lastAccess === 'Nunca' && foundUser.username.toLowerCase() !== 'admin')
+    );
+
+    if (requiresPasswordChange) {
+      playClickSound();
+      setPendingChangePasswordUser(foundUser);
+      setNewPasswordInput('');
+      setConfirmNewPasswordInput('');
+      setLoginError('');
+      setLoginSuccess('');
+      setLoginMode('first-login-change-password');
+      return;
+    }
+
     // Play victory / success chime on valid login
     playLoginSuccessSound();
 
     // Update last access
-    const updatedUsers = systemUsers.map(u => u.id === foundUser!.id ? { ...u, lastAccess: 'Ahora' } : u);
+    const updatedUsers = systemUsers.map(u => u.id === foundUser!.id ? { ...u, lastAccess: 'Ahora', mustChangePassword: false, firstLogin: false } : u);
     setSystemUsers(updatedUsers);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedUsers));
 
@@ -1851,6 +1886,106 @@ export default function App() {
     }
   };
 
+  const handleFirstLoginPasswordChangeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setLoginSuccess('');
+
+    if (!pendingChangePasswordUser) {
+      setLoginError('Error de sesión. Por favor intente iniciar sesión nuevamente.');
+      setLoginMode('login');
+      return;
+    }
+
+    if (!newPasswordInput.trim() || !confirmNewPasswordInput.trim()) {
+      playErrorSound();
+      setLoginError('Por favor complete todos los campos de contraseña.');
+      return;
+    }
+
+    if (newPasswordInput.length < 8) {
+      playErrorSound();
+      setLoginError('La nueva contraseña debe contener al menos 8 caracteres como mínimo.');
+      return;
+    }
+
+    const strength = evaluatePasswordStrength(newPasswordInput);
+    if (!strength.criteria.hasMinLength || !strength.criteria.hasLowercase || !strength.criteria.hasUppercase || !strength.criteria.hasNumber || !strength.criteria.hasSymbol) {
+      playErrorSound();
+      setLoginError('La contraseña debe cumplir con todos los requisitos: minúsculas (a-z), mayúsculas (A-Z), números (0-9) y símbolos (@ . _ # $ etc.).');
+      return;
+    }
+
+    if (newPasswordInput !== confirmNewPasswordInput) {
+      playErrorSound();
+      setLoginError('Las contraseñas no coinciden. Verifique e intente nuevamente.');
+      return;
+    }
+
+    // Success! Update user password, clear change password flags, and set last access
+    const updatedUsers = systemUsers.map(u => {
+      if (u.id === pendingChangePasswordUser.id) {
+        return {
+          ...u,
+          password: newPasswordInput,
+          mustChangePassword: false,
+          firstLogin: false,
+          lastAccess: 'Ahora'
+        };
+      }
+      return u;
+    });
+
+    setSystemUsers(updatedUsers);
+    localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedUsers));
+
+    if (token && workspaceResult?.spreadsheetId) {
+      syncUsersToSheet(token, workspaceResult.spreadsheetId, updatedUsers).catch(console.error);
+    }
+
+    playLoginSuccessSound();
+
+    const loggedInUser: SystemUser = {
+      ...pendingChangePasswordUser,
+      password: newPasswordInput,
+      mustChangePassword: false,
+      firstLogin: false,
+      lastAccess: 'Ahora'
+    };
+
+    setSessionUser(loggedInUser);
+    localStorage.setItem('sysacad_session_user', JSON.stringify(loggedInUser));
+
+    // Reset temporary states
+    setNewPasswordInput('');
+    setConfirmNewPasswordInput('');
+    setPendingChangePasswordUser(null);
+    setLoginMode('login');
+
+    // Route according to user role
+    if (loggedInUser.role === 'Administrador') {
+      setCurrentView('administrador');
+    } else if (loggedInUser.role === 'Directivo') {
+      setIsControlEscolarSubOpen(true);
+      setIsMaestrosSubOpen(true);
+      setCurrentView('alumnos');
+    } else if (loggedInUser.role === 'Control Escolar' || loggedInUser.role === 'Secretaría') {
+      setIsControlEscolarSubOpen(true);
+      setCurrentView('alumnos');
+    } else if (loggedInUser.role === 'Maestros' || loggedInUser.role === 'Docente') {
+      setIsMaestrosSubOpen(true);
+      setCurrentView('calificaciones');
+    } else if (loggedInUser.role === 'Alumno') {
+      setCurrentView('kardex-alumnos');
+    } else {
+      setCurrentView('alumnos');
+    }
+
+    if (loggedInUser.role === 'Administrador' && loggedInUser.email) {
+      handleAdminEmailChange(loggedInUser.email);
+    }
+  };
+
   const handleLocalForgotSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
@@ -1859,6 +1994,19 @@ export default function App() {
     if (!forgotEmail.trim() || !forgotNewPassword.trim()) {
       playErrorSound();
       setLoginError('Por favor ingrese su correo o usuario y la nueva contraseña.');
+      return;
+    }
+
+    if (forgotNewPassword.length < 8) {
+      playErrorSound();
+      setLoginError('La nueva contraseña debe contener al menos 8 caracteres como mínimo.');
+      return;
+    }
+
+    const strength = evaluatePasswordStrength(forgotNewPassword);
+    if (!strength.criteria.hasMinLength || !strength.criteria.hasLowercase || !strength.criteria.hasUppercase || !strength.criteria.hasNumber || !strength.criteria.hasSymbol) {
+      playErrorSound();
+      setLoginError('La contraseña debe cumplir con todos los requisitos de seguridad (a-z, A-Z, 0-9, símbolos).');
       return;
     }
 
@@ -1876,7 +2024,9 @@ export default function App() {
     const updatedUsers = [...systemUsers];
     updatedUsers[userIndex] = {
       ...updatedUsers[userIndex],
-      password: forgotNewPassword
+      password: forgotNewPassword,
+      mustChangePassword: false,
+      firstLogin: false
     };
 
     setSystemUsers(updatedUsers);
@@ -1887,7 +2037,7 @@ export default function App() {
     }
 
     playSuccessSound();
-    setLoginSuccess('Contraseña restablecida con éxito. Ya puede iniciar sesión.');
+    setLoginSuccess('Contraseña restablecida con éxito. Ya puede iniciar sesión con su nueva clave.');
     setLoginMode('login');
     
     setForgotEmail('');
@@ -5130,7 +5280,7 @@ export default function App() {
           <div className="w-full max-w-md bg-slate-900/80 border border-slate-800 rounded-3xl p-8 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-500">
             
             {/* Custom Tabs */}
-            {loginMode !== 'register' && loginMode !== 'forgot' && (
+            {loginMode !== 'register' && loginMode !== 'forgot' && loginMode !== 'first-login-change-password' && (
               <div className="flex bg-slate-950/80 p-1 rounded-xl mb-6 border border-slate-800/60">
                 <button
                   type="button"
@@ -5192,8 +5342,6 @@ export default function App() {
                     <span>{loginSuccess}</span>
                   </div>
                 )}
-
-                {/* Removing Google Sign In from main login form as requested */}
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Usuario</label>
@@ -5303,8 +5451,138 @@ export default function App() {
               </form>
             )}
 
+            {/* First Login Change Password Required Form */}
+            {loginMode === 'first-login-change-password' && (
+              <form onSubmit={handleFirstLoginPasswordChangeSubmit} className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+                <div className="text-center mb-2">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 mb-2">
+                    <KeyRound size={24} />
+                  </div>
+                  <h2 className="text-lg font-extrabold text-white">Cambio de Contraseña Obligatorio</h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Es su primer inicio de sesión. Por seguridad institucional, configure una nueva contraseña.
+                  </p>
+                </div>
+
+                {/* User details badge */}
+                {pendingChangePasswordUser && (
+                  <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <UserCircle size={18} className="text-blue-400 shrink-0" />
+                      <div>
+                        <div className="font-bold text-white leading-tight">{pendingChangePasswordUser.name}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">@{pendingChangePasswordUser.username}</div>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/15 border border-blue-500/30 text-blue-300">
+                      {pendingChangePasswordUser.role}
+                    </span>
+                  </div>
+                )}
+
+                {loginError && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl p-3.5 text-xs font-medium flex items-start gap-2.5">
+                    <ShieldAlert size={16} className="shrink-0 mt-0.5" />
+                    <span>{loginError}</span>
+                  </div>
+                )}
+
+                {/* New Password Input */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Nueva Contraseña
+                  </label>
+                  <div className="metallic-ring-wrapper relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Mínimo 8 caracteres (a-z, A-Z, 0-9, @._)"
+                      value={newPasswordInput}
+                      onChange={(e) => setNewPasswordInput(e.target.value)}
+                      className="metallic-ring-content w-full px-4 py-2.5 pr-10 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 transition-colors cursor-pointer"
+                      title={showNewPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    >
+                      {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Password Strength Meter Component */}
+                <PasswordStrengthMeter password={newPasswordInput} />
+
+                {/* Confirm New Password Input */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Confirmar Nueva Contraseña
+                  </label>
+                  <div className="metallic-ring-wrapper relative">
+                    <input
+                      type={showConfirmNewPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Repita su nueva contraseña"
+                      value={confirmNewPasswordInput}
+                      onChange={(e) => setConfirmNewPasswordInput(e.target.value)}
+                      className="metallic-ring-content w-full px-4 py-2.5 pr-10 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 transition-colors cursor-pointer"
+                      title={showConfirmNewPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    >
+                      {showConfirmNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {confirmNewPasswordInput && (
+                    <div className="text-[11px] font-semibold flex items-center gap-1.5 mt-1">
+                      {newPasswordInput === confirmNewPasswordInput ? (
+                        <span className="text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 size={13} /> Las contraseñas coinciden
+                        </span>
+                      ) : (
+                        <span className="text-rose-400 flex items-center gap-1">
+                          <ShieldAlert size={13} /> Las contraseñas aún no coinciden
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="metallic-ring-wrapper button-wrapper pt-2">
+                  <button
+                    type="submit"
+                    className="metallic-ring-content w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <ShieldCheck size={18} />
+                    <span>Guardar y Entrar al Sistema</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    playClickSound();
+                    setLoginError('');
+                    setLoginSuccess('');
+                    setPendingChangePasswordUser(null);
+                    setNewPasswordInput('');
+                    setConfirmNewPasswordInput('');
+                    setLoginMode('login');
+                  }}
+                  className="w-full text-center text-xs text-slate-400 hover:text-white font-semibold transition-colors mt-2 cursor-pointer"
+                >
+                  Cancelar y Volver al Inicio
+                </button>
+              </form>
+            )}
+
             {loginMode === 'forgot' && (
-              <form onSubmit={handleLocalForgotSubmit} className="space-y-5 animate-in fade-in duration-300">
+              <form onSubmit={handleLocalForgotSubmit} className="space-y-4 animate-in fade-in duration-300">
                 <div className="text-center mb-1">
                   <h2 className="text-xl font-bold text-white">Recuperación de Contraseña</h2>
                   <p className="text-xs text-slate-400 mt-1">Escriba su correo para actualizar su contraseña de forma instantánea</p>
@@ -5318,12 +5596,12 @@ export default function App() {
                 )}
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Correo Registrado</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Correo o Usuario Registrado</label>
                   <div className="metallic-ring-wrapper">
                     <input
-                      type="email"
+                      type="text"
                       required
-                      placeholder="ejemplo@sysacad.edu"
+                      placeholder="ejemplo@sysacad.edu o usuario"
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
@@ -5333,19 +5611,30 @@ export default function App() {
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Nueva Contraseña</label>
-                  <div className="metallic-ring-wrapper">
+                  <div className="metallic-ring-wrapper relative">
                     <input
-                      type="password"
+                      type={showForgotNewPassword ? 'text' : 'password'}
                       required
-                      placeholder="Mínimo 4 caracteres"
+                      placeholder="Mínimo 8 caracteres (a-z, A-Z, 0-9, @._)"
                       value={forgotNewPassword}
                       onChange={(e) => setForgotNewPassword(e.target.value)}
-                      className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                      className="metallic-ring-content w-full px-4 py-2.5 pr-10 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 transition-colors cursor-pointer"
+                      title={showForgotNewPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    >
+                      {showForgotNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                 </div>
 
-                <div className="metallic-ring-wrapper button-wrapper">
+                {/* Password Strength Meter for Forgot Password */}
+                <PasswordStrengthMeter password={forgotNewPassword} />
+
+                <div className="metallic-ring-wrapper button-wrapper pt-1">
                   <button
                     type="submit"
                     className="metallic-ring-content w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 cursor-pointer flex items-center justify-center gap-2"
