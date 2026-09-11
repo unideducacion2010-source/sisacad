@@ -67,38 +67,32 @@ export default function App() {
     setMuted(isNowMuted);
   };
 
-  // Effect to ensure system is 100% clean with only the administrator
-  useEffect(() => {
-    const isCleaned = localStorage.getItem('sysacad_clean_system_v4');
-    if (!isCleaned) {
-      const adminOnly: SystemUser[] = [
-        { 
-          id: '1', 
-          username: 'admin', 
-          password: 'admin123', 
-          name: 'Administrador Principal', 
-          email: 'admin@sysacad.edu', 
-          role: 'Administrador', 
-          status: 'Activo', 
-          fechaRegistro: new Date().toISOString().split('T')[0], 
-          lastAccess: 'Reciente' 
-        }
-      ];
-      setSystemUsers(adminOnly);
-      setAlumnosList([]);
-      setMateriasList([]);
-      setCalificacionesList([]);
-      setAvisosList([]);
-      localStorage.setItem('sysacad_system_users_v2', JSON.stringify(adminOnly));
-      localStorage.setItem('sysacad_alumnos_list', JSON.stringify([]));
-      localStorage.setItem('sysacad_materias_list', JSON.stringify([]));
-      localStorage.setItem('sysacad_calificaciones_list', JSON.stringify([]));
-      localStorage.setItem('sysacad_avisos_list', JSON.stringify([]));
-      localStorage.setItem('sysacad_clean_system_v4', 'true');
+  // Helper sync functions for persistent multi-device shared data
+  const syncUsersToServer = async (usersList: SystemUser[]) => {
+    try {
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users: usersList })
+      });
+    } catch (err) {
+      console.warn('Could not sync users to server store:', err);
     }
-  }, []);
+  };
 
-  // Unified System Users State (Only Administrator account)
+  const syncSystemStoreToServer = async (data: Record<string, any>) => {
+    try {
+      await fetch('/api/system-store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    } catch (err) {
+      console.warn('Could not sync system store to server:', err);
+    }
+  };
+
+  // Unified System Users State (Guarantees Administrator account is always present)
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>(() => {
     const adminUser: SystemUser = { 
       id: '1', 
@@ -109,7 +103,9 @@ export default function App() {
       role: 'Administrador', 
       status: 'Activo', 
       fechaRegistro: new Date().toISOString().split('T')[0], 
-      lastAccess: 'Reciente' 
+      lastAccess: 'Reciente',
+      mustChangePassword: false,
+      firstLogin: false
     };
 
     const saved = localStorage.getItem('sysacad_system_users_v2');
@@ -122,7 +118,6 @@ export default function App() {
       }
     }
 
-    // Preserve all registered users and guarantee the admin account is always present
     if (parsed && Array.isArray(parsed) && parsed.length > 0) {
       const hasAdmin = parsed.some(u => u.username?.toLowerCase() === 'admin' || u.role === 'Administrador');
       if (!hasAdmin) {
@@ -136,6 +131,87 @@ export default function App() {
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify([adminUser]));
     return [adminUser];
   });
+
+  // Load and synchronize shared server store across all devices (PC, Laptop, Cellphone)
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSharedServerStore = async () => {
+      try {
+        const res = await fetch('/api/system-store');
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!isMounted || !json.success || !json.data) return;
+
+        const { 
+          systemUsers: serverUsers, 
+          institutionName: serverName, 
+          institutionLogo: serverLogo,
+          alumnosList: serverAlumnos,
+          materiasList: serverMaterias,
+          calificacionesList: serverCalifs,
+          avisosList: serverAvisos,
+          ciclosList: serverCiclos
+        } = json.data;
+
+        if (Array.isArray(serverUsers) && serverUsers.length > 0) {
+          setSystemUsers(prev => {
+            const mergedMap = new Map<string, SystemUser>();
+            // Keep local users first
+            prev.forEach((u: SystemUser) => {
+              const key = (u.username || u.id).trim().toLowerCase();
+              mergedMap.set(key, u);
+            });
+            // Merge in server users
+            serverUsers.forEach((u: SystemUser) => {
+              const key = (u.username || u.id).trim().toLowerCase();
+              mergedMap.set(key, u);
+            });
+            const combined = Array.from(mergedMap.values());
+            localStorage.setItem('sysacad_system_users_v2', JSON.stringify(combined));
+            return combined;
+          });
+        }
+
+        if (serverName) {
+          setInstitutionName(serverName);
+          localStorage.setItem('sysacad_institution_name', serverName);
+        }
+
+        if (serverLogo) {
+          setInstitutionLogo(serverLogo);
+          localStorage.setItem('sysacad_institution_logo', serverLogo);
+        }
+
+        if (Array.isArray(serverAlumnos) && serverAlumnos.length > 0) {
+          setAlumnosList(serverAlumnos);
+          localStorage.setItem('sysacad_alumnos_list', JSON.stringify(serverAlumnos));
+        }
+        if (Array.isArray(serverMaterias) && serverMaterias.length > 0) {
+          setMateriasList(serverMaterias);
+          localStorage.setItem('sysacad_materias_list', JSON.stringify(serverMaterias));
+        }
+        if (Array.isArray(serverCalifs) && serverCalifs.length > 0) {
+          setCalificacionesList(serverCalifs);
+          localStorage.setItem('sysacad_calificaciones_list', JSON.stringify(serverCalifs));
+        }
+        if (Array.isArray(serverAvisos) && serverAvisos.length > 0) {
+          setAvisosList(serverAvisos);
+          localStorage.setItem('sysacad_avisos_list', JSON.stringify(serverAvisos));
+        }
+        if (Array.isArray(serverCiclos) && serverCiclos.length > 0) {
+          setCiclosList(serverCiclos);
+          localStorage.setItem('sysacad_ciclos_list', JSON.stringify(serverCiclos));
+        }
+      } catch (err) {
+        console.warn('Network sync with server store skipped/offline:', err);
+      }
+    };
+
+    fetchSharedServerStore();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Interfaces
   interface CalificacionItem {
@@ -910,6 +986,7 @@ export default function App() {
 
     setSystemUsers(updatedList);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedList));
+    syncUsersToServer(updatedList);
     setIsMaestroModalOpen(false);
 
     if (token && workspaceResult?.spreadsheetId) {
@@ -926,6 +1003,7 @@ export default function App() {
       const updated = systemUsers.filter(u => u.id !== id);
       setSystemUsers(updated);
       localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
+      syncUsersToServer(updated);
       if (token && workspaceResult?.spreadsheetId) {
         syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
       }
@@ -1571,6 +1649,7 @@ export default function App() {
 
     setSystemUsers(updatedList);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedList));
+    syncUsersToServer(updatedList);
     setIsUserModalOpen(false);
 
     // Sync to Google Sheets if connected
@@ -1606,6 +1685,7 @@ export default function App() {
     } : u);
     setSystemUsers(updated);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
+    syncUsersToServer(updated);
     if (token && workspaceResult?.spreadsheetId) {
       syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
     }
@@ -1621,6 +1701,7 @@ export default function App() {
       const updated = systemUsers.filter(u => u.id !== id);
       setSystemUsers(updated);
       localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
+      syncUsersToServer(updated);
       if (token && workspaceResult?.spreadsheetId) {
         syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
       }
@@ -1791,31 +1872,63 @@ export default function App() {
     }
   }, [captchaCode, sessionUser, loginMode, drawCaptchaImage]);
 
-  const handleLocalLoginSubmit = (e: React.FormEvent) => {
+  const handleLocalLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setLoginSuccess('');
 
-    if (!loginUsername.trim() || !loginPassword.trim()) {
+    const rawUser = loginUsername.trim();
+    const rawPass = loginPassword.trim();
+
+    if (!rawUser || !rawPass) {
       playErrorSound();
       setLoginError('Por favor ingrese su usuario y contraseña.');
       return;
     }
 
-    if (loginCaptchaInput.toUpperCase() !== captchaCode) {
+    if (loginCaptchaInput.trim().toUpperCase() !== captchaCode) {
       playErrorSound();
       setLoginError('Código CAPTCHA incorrecto. Inténtelo de nuevo.');
       generateCaptcha();
       return;
     }
 
-    const trimmedUser = loginUsername.trim().toLowerCase();
-    let foundUser = systemUsers.find(
-      u => (u.username.toLowerCase() === trimmedUser || (u.email && u.email.toLowerCase() === trimmedUser)) && 
-           (u.password === loginPassword || (u.username.toLowerCase() === 'admin' && (loginPassword === 'admin123' || loginPassword === 'admin')))
-    );
+    const trimmedUser = rawUser.toLowerCase();
 
-    if (!foundUser && trimmedUser === 'admin' && (loginPassword === 'admin123' || loginPassword === 'admin')) {
+    // Helper matcher that handles case-insensitivity and mobile whitespace
+    const checkMatch = (u: SystemUser) => {
+      const uName = (u.username || '').trim().toLowerCase();
+      const uEmail = (u.email || '').trim().toLowerCase();
+      const userMatch = uName === trimmedUser || (uEmail && uEmail === trimmedUser);
+      if (!userMatch) return false;
+
+      const exactPass = u.password === loginPassword;
+      const trimPass = (u.password || '').trim() === rawPass;
+      const adminPass = uName === 'admin' && (rawPass === 'admin123' || rawPass === 'admin');
+      return exactPass || trimPass || adminPass;
+    };
+
+    let foundUser = systemUsers.find(checkMatch);
+
+    // If user is not yet in local React state (e.g. registered on PC, now opening on cellphone), fetch latest from server
+    if (!foundUser) {
+      try {
+        const res = await fetch('/api/users');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.users) && json.users.length > 0) {
+            setSystemUsers(json.users);
+            localStorage.setItem('sysacad_system_users_v2', JSON.stringify(json.users));
+            foundUser = json.users.find(checkMatch);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not reach server store on login check:', err);
+      }
+    }
+
+    // Always permit default admin credentials as guaranteed emergency access
+    if (!foundUser && trimmedUser === 'admin' && (rawPass === 'admin123' || rawPass === 'admin')) {
       foundUser = {
         id: '1',
         username: 'admin',
@@ -1863,10 +1976,11 @@ export default function App() {
     // Play victory / success chime on valid login
     playLoginSuccessSound();
 
-    // Update last access
+    // Update last access and persist across devices
     const updatedUsers = systemUsers.map(u => u.id === foundUser!.id ? { ...u, lastAccess: 'Ahora', mustChangePassword: false, firstLogin: false } : u);
     setSystemUsers(updatedUsers);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedUsers));
+    syncUsersToServer(updatedUsers);
 
     setSessionUser(foundUser);
     localStorage.setItem('sysacad_session_user', JSON.stringify(foundUser));
@@ -1894,7 +2008,7 @@ export default function App() {
     }
   };
 
-  const handleFirstLoginPasswordChangeSubmit = (e: React.FormEvent) => {
+  const handleFirstLoginPasswordChangeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setLoginSuccess('');
@@ -1946,6 +2060,7 @@ export default function App() {
 
     setSystemUsers(updatedUsers);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedUsers));
+    syncUsersToServer(updatedUsers);
 
     if (token && workspaceResult?.spreadsheetId) {
       syncUsersToSheet(token, workspaceResult.spreadsheetId, updatedUsers).catch(console.error);
@@ -2039,6 +2154,7 @@ export default function App() {
 
     setSystemUsers(updatedUsers);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedUsers));
+    syncUsersToServer(updatedUsers);
 
     if (token && workspaceResult?.spreadsheetId) {
       syncUsersToSheet(token, workspaceResult.spreadsheetId, updatedUsers).catch(console.error);
@@ -2229,6 +2345,7 @@ export default function App() {
         const base64String = reader.result as string;
         setInstitutionLogo(base64String);
         localStorage.setItem('sysacad_institution_logo', base64String);
+        syncSystemStoreToServer({ institutionLogo: base64String });
         setSavedInstitutionNameMsg(true);
         setTimeout(() => setSavedInstitutionNameMsg(false), 2500);
       };
@@ -2239,6 +2356,7 @@ export default function App() {
   const handleInstitutionNameChange = (val: string) => {
     setInstitutionName(val);
     localStorage.setItem('sysacad_institution_name', val);
+    syncSystemStoreToServer({ institutionName: val });
     setSavedInstitutionNameMsg(true);
     setTimeout(() => setSavedInstitutionNameMsg(false), 2500);
   };
@@ -5446,6 +5564,10 @@ export default function App() {
                       onChange={(e) => setLoginUsername(e.target.value)}
                       placeholder="admin, control, maestro..."
                       className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      autoComplete="username"
                     />
                   </div>
                 </div>
@@ -5474,6 +5596,10 @@ export default function App() {
                       onChange={(e) => setLoginPassword(e.target.value)}
                       placeholder="••••••••"
                       className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      autoComplete="current-password"
                     />
                   </div>
                 </div>
@@ -5603,6 +5729,10 @@ export default function App() {
                       value={newPasswordInput}
                       onChange={(e) => setNewPasswordInput(e.target.value)}
                       className="metallic-ring-content w-full px-4 py-2.5 pr-10 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
@@ -5631,6 +5761,10 @@ export default function App() {
                       value={confirmNewPasswordInput}
                       onChange={(e) => setConfirmNewPasswordInput(e.target.value)}
                       className="metallic-ring-content w-full px-4 py-2.5 pr-10 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
@@ -5708,6 +5842,9 @@ export default function App() {
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       className="metallic-ring-content w-full px-4 py-3 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                     />
                   </div>
                 </div>
@@ -5722,6 +5859,9 @@ export default function App() {
                       value={forgotNewPassword}
                       onChange={(e) => setForgotNewPassword(e.target.value)}
                       className="metallic-ring-content w-full px-4 py-2.5 pr-10 text-sm font-semibold text-white transition-all placeholder:text-slate-600"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                     />
                     <button
                       type="button"

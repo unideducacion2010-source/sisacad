@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
@@ -7,12 +8,124 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const PORT = 3000;
+const DATA_DIR = path.join(process.cwd(), 'data');
+const STORE_FILE = path.join(DATA_DIR, 'system_store.json');
+
+const defaultStore = {
+  institutionName: 'Centro Educativo Villa Montessori de Morelia',
+  institutionLogo: '',
+  systemUsers: [
+    {
+      id: '1',
+      username: 'admin',
+      password: 'admin123',
+      name: 'Administrador Principal',
+      email: 'admin@sysacad.edu',
+      role: 'Administrador',
+      status: 'Activo',
+      fechaRegistro: new Date().toISOString().split('T')[0],
+      lastAccess: 'Reciente',
+      mustChangePassword: false,
+      firstLogin: false
+    }
+  ],
+  alumnosList: [],
+  materiasList: [],
+  calificacionesList: [],
+  avisosList: [],
+  ciclosList: [
+    {
+      id: 'c-2026-2027',
+      clave: 'CICLO-2026-2027',
+      nombre: 'CICLO ESCOLAR 2026 - 2027',
+      periodo: 'Agosto 2026 - Julio 2027',
+      fechaInicio: '2026-08-15',
+      fechaFin: '2027-07-15',
+      estatus: 'Activo',
+      observaciones: 'Ciclo escolar principal en curso',
+      fechaCreacion: new Date().toISOString().split('T')[0]
+    }
+  ]
+};
+
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+}
+
+function getSystemStore() {
+  ensureDataDir();
+  if (fs.existsSync(STORE_FILE)) {
+    try {
+      const raw = fs.readFileSync(STORE_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      return { ...defaultStore, ...parsed };
+    } catch (err) {
+      console.error('Error reading store file, using default:', err);
+    }
+  }
+  return defaultStore;
+}
+
+function saveSystemStore(newData: any) {
+  ensureDataDir();
+  const current = getSystemStore();
+  const merged = { ...current, ...newData };
+  
+  // Ensure admin user is never lost
+  if (Array.isArray(merged.systemUsers)) {
+    const hasAdmin = merged.systemUsers.some((u: any) => u.username?.toLowerCase() === 'admin' || u.role === 'Administrador');
+    if (!hasAdmin) {
+      merged.systemUsers.unshift(defaultStore.systemUsers[0]);
+    }
+  }
+
+  fs.writeFileSync(STORE_FILE, JSON.stringify(merged, null, 2), 'utf-8');
+  return merged;
+}
 
 async function startServer() {
   const app = express();
 
   // Increase payload size for base64 image transmission
   app.use(express.json({ limit: '15mb' }));
+
+  // API Routes for shared multi-device persistence (PC + Mobile)
+  app.get('/api/system-store', (req: Request, res: Response) => {
+    const store = getSystemStore();
+    res.json({ success: true, data: store });
+  });
+
+  app.post('/api/system-store', (req: Request, res: Response) => {
+    try {
+      const updated = saveSystemStore(req.body);
+      res.json({ success: true, data: updated });
+    } catch (err: any) {
+      console.error('Error saving system store:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/users', (req: Request, res: Response) => {
+    const store = getSystemStore();
+    res.json({ success: true, users: store.systemUsers || [] });
+  });
+
+  app.post('/api/users', (req: Request, res: Response) => {
+    try {
+      const { users } = req.body;
+      if (!Array.isArray(users)) {
+        res.status(400).json({ error: 'Formato de usuarios no válido.' });
+        return;
+      }
+      const updated = saveSystemStore({ systemUsers: users });
+      res.json({ success: true, users: updated.systemUsers });
+    } catch (err: any) {
+      console.error('Error saving users:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
 
   // API Route: Extract grades from image using Gemini Vision
   app.post('/api/extract-calificaciones', async (req: Request, res: Response): Promise<void> => {
