@@ -269,9 +269,9 @@ export default function App() {
         }
 
         const localCustomClientId = localStorage.getItem('sysacad_custom_google_client_id');
-        if (serverData.customClientId && serverData.customClientId.trim()) {
-          setCustomClientId(serverData.customClientId.trim());
-          setCustomClientIdInput(serverData.customClientId.trim());
+        if (json.data.customClientId && json.data.customClientId.trim()) {
+          setCustomClientId(json.data.customClientId.trim());
+          setCustomClientIdInput(json.data.customClientId.trim());
         } else if (localCustomClientId && localCustomClientId.trim()) {
           payloadToSync.customClientId = localCustomClientId.trim();
         }
@@ -426,6 +426,7 @@ export default function App() {
   const updateCalificaciones = (newList: CalificacionItem[]) => {
     setCalificacionesList(newList);
     localStorage.setItem('sysacad_calificaciones_list', JSON.stringify(newList));
+    syncSystemStoreToServer({ calificacionesList: newList });
   };
 
   const handleOpenCreateCalif = () => {
@@ -1087,7 +1088,7 @@ export default function App() {
       }
     } else {
       playSuccessSound();
-      alert('ℹ️ Maestro guardado en la memoria de este dispositivo.\n\n⚠️ AVISO: Google Drive y Sheets no están vinculados en este dispositivo. Para que este maestro se refleje en tu PC y en la nube, pulsa el botón "Vincular Google Drive & Sheets" en la barra superior.');
+      alert('✅ Maestro registrado y sincronizado en el puente central.\n\nYa puede iniciar sesión tanto desde la PC como desde el celular.');
     }
   };
 

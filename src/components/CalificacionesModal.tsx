@@ -4,6 +4,7 @@ import {
   UploadCloud, 
   FileSpreadsheet, 
   Image as ImageIcon, 
+  Camera,
   CheckCircle, 
   AlertCircle, 
   Sparkles, 
@@ -134,6 +135,7 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
     errorMsg?: string;
   }>>([]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -934,11 +936,8 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Drag and Drop Zone for Image */}
-                  <div 
-                    onClick={() => imageInputRef.current?.click()}
-                    className="border-2 border-dashed border-purple-200 hover:border-purple-400 bg-purple-50/20 hover:bg-purple-50/50 rounded-2xl p-5 sm:p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group"
-                  >
+                  {/* Drag, Drop or Direct Camera Snapshot Zone */}
+                  <div className="space-y-3">
                     <input 
                       type="file" 
                       ref={imageInputRef}
@@ -946,34 +945,69 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
                       accept="image/png, image/jpeg, image/webp, image/jpg" 
                       className="hidden" 
                     />
-                    
-                    {imagePreviewUrl ? (
-                      <div className="relative max-h-48 rounded-xl overflow-hidden border border-purple-200 shadow-sm bg-slate-900/5">
-                        <img 
-                          src={imagePreviewUrl} 
-                          alt="Lista de Calificaciones" 
-                          className="max-h-48 object-contain mx-auto"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
-                          Haz clic para cambiar imagen
+                    <input 
+                      type="file" 
+                      ref={cameraInputRef}
+                      onChange={handleImageFileChange}
+                      accept="image/*" 
+                      capture="environment"
+                      className="hidden" 
+                    />
+
+                    {/* Dual Action on Mobile/Desktop */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="p-3.5 rounded-xl border border-purple-200 bg-purple-50/70 hover:bg-purple-100/70 text-purple-800 flex items-center justify-center gap-2.5 transition-all text-xs font-bold shadow-xs cursor-pointer active:scale-98"
+                      >
+                        <Camera size={18} className="text-purple-600 shrink-0" />
+                        <span>Tomar Foto con Celular (Cámara Directa)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => imageInputRef.current?.click()}
+                        className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 flex items-center justify-center gap-2.5 transition-all text-xs font-bold shadow-xs cursor-pointer active:scale-98"
+                      >
+                        <UploadCloud size={18} className="text-indigo-600 shrink-0" />
+                        <span>Subir Imagen o Galería</span>
+                      </button>
+                    </div>
+
+                    {/* Drag and Drop Box */}
+                    <div 
+                      onClick={() => imageInputRef.current?.click()}
+                      className="border-2 border-dashed border-purple-200 hover:border-purple-400 bg-purple-50/20 hover:bg-purple-50/50 rounded-2xl p-4 sm:p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 group"
+                    >
+                      {imagePreviewUrl ? (
+                        <div className="relative max-h-48 rounded-xl overflow-hidden border border-purple-200 shadow-sm bg-slate-900/5">
+                          <img 
+                            src={imagePreviewUrl} 
+                            alt="Lista de Calificaciones" 
+                            className="max-h-48 object-contain mx-auto"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
+                            Haz clic para cambiar imagen
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="w-14 h-14 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-                          <ImageIcon size={28} />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">
-                            Haz clic o arrastra tu fotografía o escaneo de calificaciones
-                          </h4>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            Formatos soportados: <strong className="text-purple-700">JPG, PNG, WEBP</strong> (se comprime en el navegador antes de enviar)
-                          </p>
-                        </div>
-                      </>
-                    )}
+                      ) : (
+                        <>
+                          <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+                            <ImageIcon size={24} />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-xs sm:text-sm">
+                              O arrastra aquí la foto de tu lista de calificaciones
+                            </h4>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Formatos compatibles: <strong className="text-purple-700">JPG, PNG, WEBP</strong> (se comprime automáticamente para no saturar datos móviles)
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Image Processing Action Button */}
