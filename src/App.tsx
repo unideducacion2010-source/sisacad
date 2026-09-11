@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive } from './google-api';
+import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive, searchDriveFiles } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId, validateGoogleToken, clearInvalidToken } from './auth';
 import { playClickSound, playNavigateSound, playLoginSuccessSound, playLogoutSound, playSuccessSound, playErrorSound, playDeleteSound, isSoundMuted, toggleSoundMute } from './soundEffects';
 import { StudentEnrollmentModal, StudentFormData } from './components/StudentEnrollmentModal';
@@ -108,7 +108,9 @@ export default function App() {
       firstLogin: false
     };
 
-    const saved = localStorage.getItem('sysacad_system_users_v2');
+    const saved = localStorage.getItem('sysacad_system_users_v2') || 
+                  localStorage.getItem('sysacad_system_users') || 
+                  localStorage.getItem('sysacad_users');
     let parsed: any[] = [];
     if (saved) {
       try {
@@ -125,6 +127,7 @@ export default function App() {
         localStorage.setItem('sysacad_system_users_v2', JSON.stringify(fullList));
         return fullList;
       }
+      localStorage.setItem('sysacad_system_users_v2', JSON.stringify(parsed));
       return parsed;
     }
     
@@ -234,7 +237,10 @@ export default function App() {
         }
 
         // Push local pre-existing data (from PC) to server if server doesn't have it yet
-        const localSavedUsersRaw = localStorage.getItem('sysacad_system_users_v2');
+        const localSavedUsersRaw = 
+          localStorage.getItem('sysacad_system_users_v2') || 
+          localStorage.getItem('sysacad_system_users') || 
+          localStorage.getItem('sysacad_users');
         const localWorkspaceRaw = localStorage.getItem('sysacad_workspace_result');
         const localFolderLink = localStorage.getItem('sysacad_folder_link');
         const localSheetLink = localStorage.getItem('sysacad_sheet_link');
@@ -244,14 +250,18 @@ export default function App() {
         if (localSavedUsersRaw) {
           try {
             const parsedUsers = JSON.parse(localSavedUsersRaw);
-            if (Array.isArray(parsedUsers) && parsedUsers.length > (serverUsers?.length || 1)) {
-              payloadToSync.systemUsers = parsedUsers;
+            if (Array.isArray(parsedUsers) && parsedUsers.length > 0) {
+              const nonAdmin = parsedUsers.filter((u: any) => u.username?.toLowerCase() !== 'admin');
+              const serverNonAdmin = Array.isArray(serverUsers) ? serverUsers.filter((u: any) => u.username?.toLowerCase() !== 'admin') : [];
+              if (nonAdmin.length > 0 && nonAdmin.length >= serverNonAdmin.length) {
+                payloadToSync.systemUsers = parsedUsers;
+              }
             }
           } catch(e) {}
         }
-        if (!serverWorkspace && localWorkspaceRaw) {
+        if ((!serverWorkspace || !serverWorkspace.spreadsheetId) && (localWorkspaceRaw || localSheetLink || localFolderLink)) {
           try {
-            payloadToSync.workspaceResult = JSON.parse(localWorkspaceRaw);
+            if (localWorkspaceRaw) payloadToSync.workspaceResult = JSON.parse(localWorkspaceRaw);
             if (localFolderLink) payloadToSync.folderLink = localFolderLink;
             if (localSheetLink) payloadToSync.sheetLink = localSheetLink;
             if (localAdminEmail) payloadToSync.adminEmail = localAdminEmail;
@@ -1709,6 +1719,7 @@ export default function App() {
     setSystemUsers(updatedList);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updatedList));
     syncUsersToServer(updatedList);
+    syncSystemStoreToServer({ systemUsers: updatedList });
     setIsUserModalOpen(false);
 
     // Sync to Google Sheets if connected
@@ -1846,6 +1857,7 @@ export default function App() {
     setSystemUsers(updated);
     localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
     syncUsersToServer(updated);
+    syncSystemStoreToServer({ systemUsers: updated });
     if (token && workspaceResult?.spreadsheetId) {
       syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
     }
@@ -1862,6 +1874,7 @@ export default function App() {
       setSystemUsers(updated);
       localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
       syncUsersToServer(updated);
+      syncSystemStoreToServer({ systemUsers: updated });
       if (token && workspaceResult?.spreadsheetId) {
         syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
       }
@@ -2583,25 +2596,57 @@ export default function App() {
     setWorkspaceSyncStatus('Actualizando carpetas en Drive, tablas en Sheets y sincronizando todos los campos...');
 
     try {
-      // 1. Check existing spreadsheet ID
-      const savedWorkspaceRaw = localStorage.getItem('sysacad_workspace_result');
-      const targetSpreadsheetId = workspaceResult?.spreadsheetId || (savedWorkspaceRaw ? JSON.parse(savedWorkspaceRaw)?.spreadsheetId : null);
+      // 1. Locate existing spreadsheet ID across state, localStorage, or Google Drive search
+      let targetSpreadsheetId = workspaceResult?.spreadsheetId;
+      if (!targetSpreadsheetId) {
+        const savedWorkspaceRaw = localStorage.getItem('sysacad_workspace_result');
+        if (savedWorkspaceRaw) {
+          try {
+            targetSpreadsheetId = JSON.parse(savedWorkspaceRaw)?.spreadsheetId;
+          } catch(e) {}
+        }
+      }
+      if (!targetSpreadsheetId) {
+        const currentSheetLink = sheetLink || localStorage.getItem('sysacad_sheet_link');
+        if (currentSheetLink) {
+          const match = currentSheetLink.match(/[-\w]{25,}/);
+          if (match) targetSpreadsheetId = match[0];
+        }
+      }
+      if (!targetSpreadsheetId) {
+        try {
+          const driveSearch = await searchDriveFiles(activeToken, "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and (name contains 'SysAcad' or name contains 'Base de Datos Central')");
+          if (driveSearch.files && driveSearch.files.length > 0) {
+            targetSpreadsheetId = driveSearch.files[0].id;
+          }
+        } catch(e) {
+          console.warn('Drive search error for spreadsheet:', e);
+        }
+      }
 
       let mergedUsers = [...systemUsers];
+      let existingSheetData: any = null;
 
-      // Merge users from Google Sheets if spreadsheet already exists
+      // Merge users and tables from Google Sheets if spreadsheet already exists
       if (targetSpreadsheetId) {
         try {
           const sheetUsers = await fetchUsersFromSheets(activeToken, targetSpreadsheetId);
           if (Array.isArray(sheetUsers) && sheetUsers.length > 0) {
             const userMap = new Map<string, SystemUser>();
+            // Keep local users first
             mergedUsers.forEach(u => {
               const k = (u.username || u.id).trim().toLowerCase();
               userMap.set(k, u);
             });
+            // Merge in sheet users (preserve existing passwords if present)
             sheetUsers.forEach(u => {
               const k = (u.username || u.id).trim().toLowerCase();
-              userMap.set(k, u);
+              if (userMap.has(k)) {
+                const prev = userMap.get(k)!;
+                userMap.set(k, { ...u, ...prev, password: prev.password || u.password });
+              } else {
+                userMap.set(k, u);
+              }
             });
             mergedUsers = Array.from(userMap.values());
             setSystemUsers(mergedUsers);
@@ -2609,6 +2654,12 @@ export default function App() {
           }
         } catch (e) {
           console.warn('Could not fetch existing users from sheet, using local/server users:', e);
+        }
+
+        try {
+          existingSheetData = await loadFullDataFromSheets(activeToken, targetSpreadsheetId);
+        } catch(e) {
+          console.warn('Could not read existing sheet data:', e);
         }
       }
 
@@ -2625,7 +2676,12 @@ export default function App() {
             });
             storeJson.data.systemUsers.forEach((u: SystemUser) => {
               const k = (u.username || u.id).trim().toLowerCase();
-              userMap.set(k, u);
+              if (userMap.has(k)) {
+                const prev = userMap.get(k)!;
+                userMap.set(k, { ...u, ...prev, password: prev.password || u.password });
+              } else {
+                userMap.set(k, u);
+              }
             });
             mergedUsers = Array.from(userMap.values());
             setSystemUsers(mergedUsers);
@@ -2636,42 +2692,104 @@ export default function App() {
         console.warn('Could not read server store:', e);
       }
 
+      // Merge loaded sheet tables if local lists are empty
+      let workingAlumnos = [...alumnosList];
+      let workingMaterias = [...materiasList];
+      let workingCalifs = [...calificacionesList];
+      let workingAvisos = [...avisosList];
+
+      if (existingSheetData) {
+        if (workingAlumnos.length === 0 && existingSheetData.alumnos?.length > 0) {
+          workingAlumnos = existingSheetData.alumnos;
+          setAlumnosList(workingAlumnos);
+          localStorage.setItem('sysacad_alumnos_list', JSON.stringify(workingAlumnos));
+        }
+        if (workingMaterias.length === 0 && existingSheetData.materias?.length > 0) {
+          workingMaterias = existingSheetData.materias;
+          setMateriasList(workingMaterias);
+          localStorage.setItem('sysacad_materias_list', JSON.stringify(workingMaterias));
+        }
+        if (workingCalifs.length === 0 && existingSheetData.calificaciones?.length > 0) {
+          workingCalifs = existingSheetData.calificaciones;
+          setCalificacionesList(workingCalifs);
+          localStorage.setItem('sysacad_calificaciones_list', JSON.stringify(workingCalifs));
+        }
+        if (workingAvisos.length === 0 && existingSheetData.avisos?.length > 0) {
+          workingAvisos = existingSheetData.avisos;
+          setAvisosList(workingAvisos);
+          localStorage.setItem('sysacad_avisos_list', JSON.stringify(workingAvisos));
+        }
+      }
+
       const activeCycle = ciclosList.find(c => c.estatus === 'Activo') || ciclosList[0];
       const activeCycleName = activeCycle ? activeCycle.nombre : 'CICLO ESCOLAR 2026 - 2027';
 
       const appData = {
         activeCycleName: activeCycleName,
-        studentsList: alumnosList,
+        studentsList: workingAlumnos,
         teachersList: mergedUsers.filter(u => u.role === 'Docente' || u.role === 'Maestros' || u.role === 'Directivo'),
-        materiasList: materiasList,
+        materiasList: workingMaterias,
         ciclosList: ciclosList,
-        calificacionesList: calificacionesList,
+        calificacionesList: workingCalifs,
         controlRecords: [
-          { id: '1', cicloEscolar: activeCycleName, periodo: activeCycle ? activeCycle.periodo : 'Agosto 2026 - Julio 2027', turno: 'Matutino', inscritos: alumnosList.length, estatus: 'Activo' }
+          { id: '1', cicloEscolar: activeCycleName, periodo: activeCycle ? activeCycle.periodo : 'Agosto 2026 - Julio 2027', turno: 'Matutino', inscritos: workingAlumnos.length, estatus: 'Activo' }
         ],
-        kardexList: alumnosList.map(a => ({
+        kardexList: workingAlumnos.map(a => ({
           id: a.id,
           alumno: `${a.nombres} ${a.apellidos}`,
           promedioGeneral: '9.2',
-          materiasCursadas: materiasList.length,
-          creditosAcumulados: materiasList.reduce((acc, m) => acc + (m.creditos || 0), 0),
+          materiasCursadas: workingMaterias.length,
+          creditosAcumulados: workingMaterias.reduce((acc, m) => acc + (m.creditos || 0), 0),
           estatusAcademico: 'Regular'
         })),
         systemUsers: mergedUsers,
-        avisosList: avisosList
+        avisosList: workingAvisos
       };
 
       const res = await setupSysAcadWorkspace(activeToken, appData, workspaceResult);
       setWorkspaceResult(res);
       localStorage.setItem('sysacad_workspace_result', JSON.stringify(res));
 
+      // Final merged users from setupSysAcadWorkspace (includes users preserved from Sheets)
+      const finalUsers = (res.mergedUsers && res.mergedUsers.length > 0) ? res.mergedUsers : mergedUsers;
+      setSystemUsers(finalUsers);
+      localStorage.setItem('sysacad_system_users_v2', JSON.stringify(finalUsers));
+      syncUsersToServer(finalUsers);
+
       // Sincronizar usuarios con la hoja Usuarios_Sistema
       if (res.spreadsheetId) {
         try {
-          await syncUsersToSheet(activeToken, res.spreadsheetId, mergedUsers);
+          await syncUsersToSheet(activeToken, res.spreadsheetId, finalUsers);
         } catch (errUsers) {
           console.warn('Could not auto-sync users sheet:', errUsers);
         }
+      }
+
+      // Recover or set any loaded tables from sheets
+      let finalAlumnos = workingAlumnos;
+      let finalMaterias = workingMaterias;
+      let finalCalifs = workingCalifs;
+      let finalAvisos = workingAvisos;
+
+      if (res.loadedData?.alumnos && res.loadedData.alumnos.length > 0) {
+        finalAlumnos = res.loadedData.alumnos;
+        setAlumnosList(finalAlumnos);
+        localStorage.setItem('sysacad_alumnos_list', JSON.stringify(finalAlumnos));
+      }
+      if (res.loadedData?.materias && res.loadedData.materias.length > 0) {
+        finalMaterias = res.loadedData.materias;
+        setMateriasList(finalMaterias);
+        localStorage.setItem('sysacad_materias_list', JSON.stringify(finalMaterias));
+      }
+      if (res.loadedData?.calificaciones && res.loadedData.calificaciones.length > 0) {
+        finalCalifs = res.loadedData.calificaciones;
+        setCalificacionesList(finalCalifs);
+        localStorage.setItem('sysacad_calificaciones_list', JSON.stringify(finalCalifs));
+      }
+      if (res.loadedData?.avisos && res.loadedData.avisos.length > 0) {
+        finalAvisos = res.loadedData.avisos;
+        setAvisosList(finalAvisos);
+        localStorage.setItem('sysacad_avisos_list', JSON.stringify(finalAvisos));
       }
 
       // Update active cycle with folderId and folderUrl if returned
@@ -2707,20 +2825,19 @@ export default function App() {
         folderLink: res.rootFolderUrl,
         reportsFolderLink: repUrl,
         sheetLink: res.spreadsheetUrl,
-        systemUsers: mergedUsers,
-        alumnosList: alumnosList,
-        materiasList: materiasList,
-        calificacionesList: calificacionesList,
-        avisosList: avisosList,
+        systemUsers: finalUsers,
+        alumnosList: finalAlumnos,
+        materiasList: finalMaterias,
+        calificacionesList: finalCalifs,
+        avisosList: finalAvisos,
         ciclosList: ciclosList
       });
-      syncUsersToServer(mergedUsers);
 
       playSuccessSound();
-      setWorkspaceSyncStatus('¡Estructura de Google Workspace y base de datos sincronizada con todos los dispositivos y menús!');
+      setWorkspaceSyncStatus(`¡Google Drive y Sheets sincronizados! ${finalUsers.length} usuario(s) y todos los campos vinculados con PC y celular.`);
       setStatus({ 
         type: 'success', 
-        message: '¡Sincronización completada con éxito! Todos los campos, usuarios, carpetas de Google Drive y tablas de Google Sheets han sido actualizados para PC y celular.' 
+        message: `¡Sincronización completada con éxito! Se vincularon Google Drive y Google Sheets. Se actualizaron ${finalUsers.length} usuarios registrados y todos los campos entre PC, celular y servidor central.` 
       });
     } catch (err: any) {
       console.error('Workspace sync error:', err);

@@ -1,0 +1,41 @@
+{
+  "institutionName": "Centro Educativo Villa Montessori de Morelia",
+  "institutionLogo": "",
+  "adminEmail": "c.e.v.montessori@gmail.com",
+  "workspaceResult": null,
+  "folderLink": null,
+  "reportsFolderLink": null,
+  "sheetLink": null,
+  "systemUsers": [
+    {
+      "id": "1",
+      "username": "admin",
+      "password": "admin123",
+      "name": "Administrador Principal",
+      "email": "c.e.v.montessori@gmail.com",
+      "role": "Administrador",
+      "status": "Activo",
+      "fechaRegistro": "2026-09-11",
+      "lastAccess": "Reciente",
+      "mustChangePassword": false,
+      "firstLogin": false
+    }
+  ],
+  "alumnosList": [],
+  "materiasList": [],
+  "calificacionesList": [],
+  "avisosList": [],
+  "ciclosList": [
+    {
+      "id": "c-2026-2027",
+      "clave": "CICLO-2026-2027",
+      "nombre": "CICLO ESCOLAR 2026 - 2027",
+      "periodo": "Agosto 2026 - Julio 2027",
+      "fechaInicio": "2026-08-15",
+      "fechaFin": "2027-07-15",
+      "estatus": "Activo",
+      "observaciones": "Ciclo escolar principal en curso",
+      "fechaCreacion": "2026-09-11"
+    }
+  ]
+}

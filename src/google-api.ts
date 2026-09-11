@@ -10,6 +10,8 @@ export interface WorkspaceSetupResult {
   spreadsheetId: string;
   spreadsheetUrl: string;
   subfolders: { name: string; id: string; url: string }[];
+  mergedUsers?: any[];
+  loadedData?: any;
 }
 
 export async function getDriveFileMetadata(token: string, fileId: string) {
@@ -630,7 +632,66 @@ export async function setupSysAcadWorkspace(token: string, appData: any, cachedR
   // 6. Ensure master headers exist
   await writeAllMasterHeaders(token, spreadsheetId);
 
-  // 7. Sync all current data from app state into the sheets (updates existing rows cleanly without duplicating)
+  // 7. CRITICAL: Fetch and merge existing data from Sheets BEFORE syncing to prevent data loss across devices
+  let finalUsers = [...(appData.systemUsers || [])];
+  let finalStudents = [...(appData.studentsList || [])];
+  let finalMaterias = [...(appData.materiasList || [])];
+  let finalCalifs = [...(appData.calificacionesList || [])];
+  let finalAvisos = [...(appData.avisosList || [])];
+
+  try {
+    const sheetUsers = await fetchUsersFromSheets(token, spreadsheetId);
+    if (Array.isArray(sheetUsers) && sheetUsers.length > 0) {
+      const userMap = new Map<string, any>();
+      // 1. Put sheet users first
+      sheetUsers.forEach((u: any) => {
+        const k = (u.username || u.id || '').trim().toLowerCase();
+        if (k) userMap.set(k, u);
+      });
+      // 2. Merge appData users (keep passwords or local updates)
+      finalUsers.forEach((u: any) => {
+        const k = (u.username || u.id || '').trim().toLowerCase();
+        if (k) {
+          const prev = userMap.get(k);
+          if (prev) {
+            userMap.set(k, { ...prev, ...u, password: u.password || prev.password });
+          } else {
+            userMap.set(k, u);
+          }
+        }
+      });
+      finalUsers = Array.from(userMap.values());
+      appData.systemUsers = finalUsers;
+    }
+  } catch (errUsers) {
+    console.warn('Could not read existing sheet users before sync:', errUsers);
+  }
+
+  try {
+    const fullData = await loadFullDataFromSheets(token, spreadsheetId);
+    if (fullData) {
+      if ((!finalStudents || finalStudents.length === 0) && fullData.alumnos?.length > 0) {
+        finalStudents = fullData.alumnos;
+        appData.studentsList = finalStudents;
+      }
+      if ((!finalMaterias || finalMaterias.length === 0) && fullData.materias?.length > 0) {
+        finalMaterias = fullData.materias;
+        appData.materiasList = finalMaterias;
+      }
+      if ((!finalCalifs || finalCalifs.length === 0) && fullData.calificaciones?.length > 0) {
+        finalCalifs = fullData.calificaciones;
+        appData.calificacionesList = finalCalifs;
+      }
+      if ((!finalAvisos || finalAvisos.length === 0) && fullData.avisos?.length > 0) {
+        finalAvisos = fullData.avisos;
+        appData.avisosList = finalAvisos;
+      }
+    }
+  } catch (errFull) {
+    console.warn('Could not read full sheet tables before sync:', errFull);
+  }
+
+  // 8. Sync all merged data from app state into the sheets (updates rows cleanly without erasing)
   await syncAllDataToSheets(token, spreadsheetId, appData);
 
   return {
@@ -641,7 +702,14 @@ export async function setupSysAcadWorkspace(token: string, appData: any, cachedR
     cycleFolderName: activeCycleName,
     spreadsheetId,
     spreadsheetUrl,
-    subfolders: subfoldersList
+    subfolders: subfoldersList,
+    mergedUsers: finalUsers,
+    loadedData: {
+      alumnos: finalStudents,
+      materias: finalMaterias,
+      calificaciones: finalCalifs,
+      avisos: finalAvisos
+    }
   };
 }
 

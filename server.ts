@@ -69,6 +69,12 @@ function getSystemStore() {
     } catch (err) {
       console.error('Error reading store file, using default:', err);
     }
+  } else {
+    try {
+      fs.writeFileSync(STORE_FILE, JSON.stringify(defaultStore, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Error creating initial store file:', err);
+    }
   }
   return defaultStore;
 }
