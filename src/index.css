@@ -9,16 +9,27 @@
   scrollbar-width: none;
 }
 
-/* Custom Sleek Sidebar - Fixed clean menu with hidden scrollbars */
+/* Custom Sleek Sidebar - Dynamic scrollbar that appears when menus expand */
 .sidebar-scrollbar {
   overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
 }
 .sidebar-scrollbar::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
+  width: 6px;
+}
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.4);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+.sidebar-scrollbar:hover::-webkit-scrollbar-thumb,
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.8);
 }
 
 @property --border-angle {
