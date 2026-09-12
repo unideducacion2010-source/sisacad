@@ -1691,6 +1691,25 @@ export default function App() {
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [copiedCellUrl, setCopiedCellUrl] = useState(false);
   const [syncFeedbackMessage, setSyncFeedbackMessage] = useState<string | null>(null);
+  const [customMobileUrl, setCustomMobileUrl] = useState<string>(() => {
+    try {
+      return localStorage.getItem('sysacad_custom_mobile_url') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const getPublicMobileUrl = () => {
+    if (customMobileUrl.trim()) return customMobileUrl.trim();
+    if (typeof window === 'undefined') return 'https://ais-pre-ogx2s2n5vd2t3usuxsxljy-64544171970.us-west1.run.app';
+    let href = window.location.origin;
+    // La URL 'ais-dev-' es privada del editor y causa 403 en teléfonos externos.
+    // La URL 'ais-pre-' es la versión pública compartible accesible desde cualquier celular.
+    if (href.includes('ais-dev-')) {
+      href = href.replace('ais-dev-', 'ais-pre-');
+    }
+    return href;
+  };
 
   const handleForceCloudSync = async () => {
     setIsSyncingUsers(true);
@@ -6066,114 +6085,6 @@ export default function App() {
                     </div>
                   </div>
                 )}
-
-                {/* Modal de Emparejamiento y Conexión Móvil / QR */}
-                {isSyncModalOpen && (
-                  <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-                      <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
-                            <Smartphone size={22} className="text-white" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-white text-base">Enlace y Conexión con Celular</h4>
-                            <p className="text-xs text-blue-100">Escanea o copia el enlace para abrir en tu celular</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setIsSyncModalOpen(false)}
-                          className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <X size={20} />
-                        </button>
-                      </div>
-
-                      <div className="p-6 space-y-6">
-                        {/* QR Code section */}
-                        <div className="flex flex-col items-center justify-center text-center p-5 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                          <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-200 mb-3">
-                            <img
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                                typeof window !== 'undefined' ? window.location.href : 'https://ais-pre-ogx2s2n5vd2t3usuxsxljy-64544171970.us-west1.run.app'
-                              )}`}
-                              alt="Código QR para celular"
-                              className="w-48 h-48 rounded-lg"
-                              referrerPolicy="no-referrer"
-                            />
-                          </div>
-                          <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                            <QrCode size={16} className="text-blue-600" />
-                            Apunta la cámara de tu celular para abrir al instante
-                          </p>
-                          <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
-                            No necesitas descargar ninguna app. Se abrirá directamente en el navegador de tu teléfono con todos los usuarios sincronizados.
-                          </p>
-                        </div>
-
-                        {/* Direct Link Section */}
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                            Enlace directo del Sistema
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              readOnly
-                              value={typeof window !== 'undefined' ? window.location.href : 'https://ais-pre-ogx2s2n5vd2t3usuxsxljy-64544171970.us-west1.run.app'}
-                              className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 select-all"
-                            />
-                            <button
-                              onClick={() => {
-                                const url = typeof window !== 'undefined' ? window.location.href : 'https://ais-pre-ogx2s2n5vd2t3usuxsxljy-64544171970.us-west1.run.app';
-                                navigator.clipboard.writeText(url);
-                                setCopiedCellUrl(true);
-                                playClickSound();
-                                setTimeout(() => setCopiedCellUrl(false), 2500);
-                              }}
-                              className={`px-4 py-2.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0 ${
-                                copiedCellUrl 
-                                  ? 'bg-emerald-600 text-white' 
-                                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-                              }`}
-                            >
-                              {copiedCellUrl ? <Check size={16} /> : <Copy size={16} />}
-                              <span>{copiedCellUrl ? '¡Copiado!' : 'Copiar Enlace'}</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Summary of active accounts & guarantees */}
-                        <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-xs text-emerald-950 space-y-2">
-                          <div className="flex items-center gap-2 font-bold text-emerald-900">
-                            <CheckCircle2 size={18} className="text-emerald-600" />
-                            <span>Sincronización Total Garantizada ({systemUsers.length} cuentas listas)</span>
-                          </div>
-                          <p className="text-[11px] leading-relaxed text-emerald-900/80">
-                            Todos los docentes y personal que registraste en esta PC están listos para entrar desde su teléfono. Los usuarios no necesitan vincular Google Sheets: inician sesión directamente con su usuario y contraseña.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                        <button
-                          onClick={handleForceCloudSync}
-                          disabled={isSyncingUsers}
-                          className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center gap-2 cursor-pointer transition-all disabled:opacity-60"
-                        >
-                          <RefreshCw size={14} className={isSyncingUsers ? 'animate-spin text-blue-600' : ''} />
-                          <span>{isSyncingUsers ? 'Sincronizando...' : 'Refrescar Nube Ahora'}</span>
-                        </button>
-                        <button
-                          onClick={() => setIsSyncModalOpen(false)}
-                          className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
-                        >
-                          Entendido / Cerrar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -7193,7 +7104,11 @@ export default function App() {
           <div className="flex items-center gap-3">
             {/* Direct button to open QR / Mobile connection modal */}
             <button
-              onClick={() => setIsSyncModalOpen(true)}
+              id="btn-vincular-celular-header"
+              onClick={() => {
+                playClickSound();
+                setIsSyncModalOpen(true);
+              }}
               type="button"
               className="p-2 sm:px-3 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs font-semibold hover:scale-105 active:scale-95"
               title="Vincular con celular mediante Código QR o enlace directo"
@@ -7446,6 +7361,159 @@ export default function App() {
         playClickSound={playClickSound}
         playSuccessSound={playSuccessSound}
       />
+
+      {/* Modal Global: Emparejamiento y Conexión Móvil / QR */}
+      {isSyncModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
+                  <Smartphone size={22} className="text-white" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-base">Enlace y Conexión con Celular</h4>
+                  <p className="text-xs text-blue-100">Escanea o copia el enlace para abrir en tu celular</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setIsSyncModalOpen(false);
+                }}
+                className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+              {/* QR Code section */}
+              <div className="flex flex-col items-center justify-center text-center p-5 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-200 mb-3">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
+                      getPublicMobileUrl()
+                    )}`}
+                    alt="Código QR para celular"
+                    className="w-52 h-52 rounded-lg object-contain mx-auto"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <p className="text-xs font-semibold text-slate-800 flex items-center justify-center gap-1.5">
+                  <QrCode size={16} className="text-blue-600" />
+                  Apunta la cámara de tu celular para abrir al instante
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">
+                  Enlace público sin restricción 403. Se abrirá en el navegador de tu teléfono con todos los usuarios sincronizados.
+                </p>
+              </div>
+
+              {/* Direct Link Section */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Enlace Público para Celular (Sin error 403)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={getPublicMobileUrl()}
+                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 select-all"
+                    />
+                    <button
+                      onClick={() => {
+                        const url = getPublicMobileUrl();
+                        navigator.clipboard.writeText(url);
+                        setCopiedCellUrl(true);
+                        playClickSound();
+                        setTimeout(() => setCopiedCellUrl(false), 2500);
+                      }}
+                      className={`px-4 py-2.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0 ${
+                        copiedCellUrl 
+                          ? 'bg-emerald-600 text-white' 
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {copiedCellUrl ? <Check size={16} /> : <Copy size={16} />}
+                      <span>{copiedCellUrl ? '¡Copiado!' : 'Copiar Enlace'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Optional Custom URL for Vercel */}
+                <div className="pt-2 border-t border-slate-100">
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    🌐 ¿Vas a probar en Vercel o tu propio dominio?
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="Ejemplo: https://mi-colegio.vercel.app"
+                    value={customMobileUrl}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomMobileUrl(val);
+                      try {
+                        localStorage.setItem('sysacad_custom_mobile_url', val);
+                      } catch {}
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Al escribir tu enlace de Vercel aquí, el código QR y el botón de copiar se actualizarán automáticamente.
+                  </p>
+                </div>
+              </div>
+
+              {/* Info Callout */}
+              <div className="p-3.5 bg-blue-50/80 border border-blue-200/80 rounded-xl text-[11px] text-blue-950 space-y-1.5 leading-relaxed">
+                <div className="font-bold flex items-center gap-1.5 text-blue-900">
+                  <span>ℹ️</span>
+                  <span>¿Por qué salió "Page not found"?</span>
+                </div>
+                <p>
+                  En Google AI Studio, la dirección pública compartida sólo se activa cuando haces clic en el botón <strong>"Share" / "Compartir"</strong> en la barra superior derecha de AI Studio.
+                </p>
+                <p className="text-blue-900/80">
+                  Si ya vas a desplegar en <strong>Vercel</strong> (a través de tu repositorio de GitHub), una vez que Vercel te dé tu enlace final, simplemente pégalo en la casilla de arriba para generar tu QR definitivo.
+                </p>
+              </div>
+
+              {/* Summary of active accounts & guarantees */}
+              <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-xs text-emerald-950 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-emerald-900">
+                  <CheckCircle2 size={18} className="text-emerald-600" />
+                  <span>Sincronización Total Garantizada ({systemUsers.length} cuentas listas)</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-emerald-900/80">
+                  Todos los docentes y personal que registraste en esta PC están listos para entrar desde su teléfono. Los usuarios no necesitan vincular Google Sheets: inician sesión directamente con su usuario y contraseña.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <button
+                onClick={handleForceCloudSync}
+                disabled={isSyncingUsers}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center gap-2 cursor-pointer transition-all disabled:opacity-60"
+              >
+                <RefreshCw size={14} className={isSyncingUsers ? 'animate-spin text-blue-600' : ''} />
+                <span>{isSyncingUsers ? 'Sincronizando...' : 'Refrescar Nube Ahora'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setIsSyncModalOpen(false);
+                }}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
+              >
+                Entendido / Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
         </motion.div>
       )}
     </AnimatePresence>
