@@ -203,16 +203,36 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
-    // Immediately push any local users to server so server store is always fresh
+    // Immediately push any local state (users, alumnos, materias, etc.) to server/Firebase so server store is always fresh
     const savedLocal = localStorage.getItem('sysacad_system_users_v2') || localStorage.getItem('sysacad_system_users');
+    const localName = localStorage.getItem('sysacad_institution_name');
+    const localLogo = localStorage.getItem('sysacad_institution_logo');
+    const localAlumnos = localStorage.getItem('sysacad_alumnos_list');
+    const localMaterias = localStorage.getItem('sysacad_materias_list');
+    const localCalifs = localStorage.getItem('sysacad_calificaciones_list');
+    const localAvisos = localStorage.getItem('sysacad_avisos_list');
+    const localCiclos = localStorage.getItem('sysacad_ciclos_list');
+
+    const fullPayload: Record<string, any> = {};
     if (savedLocal) {
       try {
         const parsed = JSON.parse(savedLocal);
         if (Array.isArray(parsed) && parsed.length > 0) {
           syncUsersToServer(parsed);
-          syncSystemStoreToServer({ systemUsers: parsed });
+          fullPayload.systemUsers = parsed;
         }
       } catch (e) {}
+    }
+    if (localName) fullPayload.institutionName = localName;
+    if (localLogo) fullPayload.institutionLogo = localLogo;
+    if (localAlumnos) { try { fullPayload.alumnosList = JSON.parse(localAlumnos); } catch(e){} }
+    if (localMaterias) { try { fullPayload.materiasList = JSON.parse(localMaterias); } catch(e){} }
+    if (localCalifs) { try { fullPayload.calificacionesList = JSON.parse(localCalifs); } catch(e){} }
+    if (localAvisos) { try { fullPayload.avisosList = JSON.parse(localAvisos); } catch(e){} }
+    if (localCiclos) { try { fullPayload.ciclosList = JSON.parse(localCiclos); } catch(e){} }
+
+    if (Object.keys(fullPayload).length > 0) {
+      syncSystemStoreToServer(fullPayload);
     }
 
     const applyServerData = (data: any) => {
@@ -5823,14 +5843,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        onClick={() => setIsSyncModalOpen(true)}
-                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium py-2.5 px-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer text-sm"
-                        title="Abrir o emparejar en celular mediante QR o enlace"
-                      >
-                        <Smartphone size={18} />
-                        <span>Emparejar con Celular</span>
-                      </button>
+
 
                       <button
                         onClick={handleForceCloudSync}
@@ -5886,13 +5899,6 @@ export default function App() {
                           <span>Respaldar en Sheet</span>
                         </button>
                       )}
-                      <button
-                        onClick={() => setIsSyncModalOpen(true)}
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <QrCode size={15} />
-                        <span>Ver QR / Enlace Celular</span>
-                      </button>
                     </div>
                   </div>
 
@@ -7401,20 +7407,7 @@ export default function App() {
 
           <div className="flex items-center gap-3">
             {/* Direct button to open QR / Mobile connection modal */}
-            <button
-              id="btn-vincular-celular-header"
-              onClick={() => {
-                playClickSound();
-                setIsSyncModalOpen(true);
-              }}
-              type="button"
-              className="p-2 sm:px-3 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs font-semibold hover:scale-105 active:scale-95"
-              title="Vincular con celular mediante Código QR o enlace directo"
-            >
-              <Smartphone size={16} className="text-indigo-600" />
-              <span className="hidden sm:inline">Vincular con Celular (QR)</span>
-              <span className="sm:hidden">QR Celular</span>
-            </button>
+
 
             {/* Sound FX Button Toggle */}
             <button
@@ -7660,208 +7653,7 @@ export default function App() {
         playSuccessSound={playSuccessSound}
       />
 
-      {/* Modal Global: Emparejamiento y Conexión Móvil / QR */}
-      {isSyncModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
-                  <Smartphone size={22} className="text-white" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-white text-base">Enlace y Conexión con Celular</h4>
-                  <p className="text-xs text-blue-100">Escanea o copia el enlace para abrir en tu celular</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setIsSyncModalOpen(false);
-                }}
-                className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
 
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              {/* QR Code section */}
-              <div className="flex flex-col items-center justify-center text-center p-5 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-200 mb-3">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(
-                      getMobileSyncUrl()
-                    )}`}
-                    alt="Código QR para celular"
-                    className="w-56 h-56 rounded-lg object-contain mx-auto"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-                <p className="text-xs font-bold text-slate-800 flex items-center justify-center gap-1.5">
-                  <QrCode size={16} className="text-blue-600" />
-                  Apunta la cámara de tu celular para abrir al instante
-                </p>
-                <p className="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">
-                  El QR transfiere automáticamente los <strong>{systemUsers.length} usuarios registrados</strong> para que aparezcan en tu teléfono de inmediato.
-                </p>
-              </div>
-
-              {/* Bundled users preview */}
-              <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-blue-900">
-                  <span className="flex items-center gap-1.5">
-                    <UserCircle size={16} className="text-blue-600" />
-                    Cuentas listas para tu teléfono ({systemUsers.length}):
-                  </span>
-                  <span className="text-[10px] bg-blue-200/70 text-blue-900 px-2 py-0.5 rounded-full font-semibold">
-                    100% Emparejados
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-0.5">
-                  {systemUsers.map((u) => (
-                    <span
-                      key={u.id || u.username}
-                      className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-xs font-mono text-blue-950 font-semibold shadow-2xs flex items-center gap-1"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      <span>{u.username}</span>
-                      <span className="text-[10px] text-slate-500 font-sans font-normal">({u.role})</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Direct Link & Sync Code Section */}
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Enlace Completo de Sincronización para Celular
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={getMobileSyncUrl()}
-                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 select-all"
-                    />
-                    <button
-                      onClick={() => {
-                        const url = getMobileSyncUrl();
-                        navigator.clipboard.writeText(url);
-                        setCopiedCellUrl(true);
-                        playClickSound();
-                        setTimeout(() => setCopiedCellUrl(false), 2500);
-                      }}
-                      className={`px-4 py-2.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0 ${
-                        copiedCellUrl 
-                          ? 'bg-emerald-600 text-white' 
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
-                      }`}
-                    >
-                      {copiedCellUrl ? <Check size={16} /> : <Copy size={16} />}
-                      <span>{copiedCellUrl ? '¡Copiado!' : 'Copiar Enlace'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Secondary Option: Copy Raw Sync Code */}
-                <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-700">¿Prefieres pegar un código corto?</p>
-                    <p className="text-[11px] text-slate-500">Copia el código y pégalo en la pantalla de inicio de tu celular.</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const code = getSystemSyncCode();
-                      navigator.clipboard.writeText(code);
-                      setCopiedSyncCode(true);
-                      playClickSound();
-                      setTimeout(() => setCopiedSyncCode(false), 2500);
-                    }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-                      copiedSyncCode
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-800 hover:bg-slate-900 text-white'
-                    }`}
-                  >
-                    {copiedSyncCode ? <Check size={14} /> : <KeyRound size={14} />}
-                    <span>{copiedSyncCode ? '¡Código Copiado!' : 'Copiar Código'}</span>
-                  </button>
-                </div>
-
-                {/* Optional Custom URL for Vercel */}
-                <div className="pt-2 border-t border-slate-100">
-                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
-                    🌐 ¿Vas a probar en Vercel o tu propio dominio?
-                  </label>
-                  <input
-                    type="url"
-                    placeholder="Ejemplo: https://mi-colegio.vercel.app"
-                    value={customMobileUrl}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCustomMobileUrl(val);
-                      try {
-                        localStorage.setItem('sysacad_custom_mobile_url', val);
-                      } catch {}
-                    }}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Al escribir tu enlace de Vercel aquí, el código QR y el botón de copiar se actualizarán automáticamente.
-                  </p>
-                </div>
-              </div>
-
-              {/* Info Callout */}
-              <div className="p-3.5 bg-blue-50/80 border border-blue-200/80 rounded-xl text-[11px] text-blue-950 space-y-1.5 leading-relaxed">
-                <div className="font-bold flex items-center gap-1.5 text-blue-900">
-                  <span>ℹ️</span>
-                  <span>¿Por qué salió "Page not found"?</span>
-                </div>
-                <p>
-                  En Google AI Studio, la dirección pública compartida sólo se activa cuando haces clic en el botón <strong>"Share" / "Compartir"</strong> en la barra superior derecha de AI Studio.
-                </p>
-                <p className="text-blue-900/80">
-                  Si ya vas a desplegar en <strong>Vercel</strong> (a través de tu repositorio de GitHub), una vez que Vercel te dé tu enlace final, simplemente pégalo en la casilla de arriba para generar tu QR definitivo.
-                </p>
-              </div>
-
-              {/* Summary of active accounts & guarantees */}
-              <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-xs text-emerald-950 space-y-2">
-                <div className="flex items-center gap-2 font-bold text-emerald-900">
-                  <CheckCircle2 size={18} className="text-emerald-600" />
-                  <span>Sincronización Total Garantizada ({systemUsers.length} cuentas listas)</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-emerald-900/80">
-                  Todos los docentes y personal que registraste en esta PC están listos para entrar desde su teléfono. Los usuarios no necesitan vincular Google Sheets: inician sesión directamente con su usuario y contraseña.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-              <button
-                onClick={handleForceCloudSync}
-                disabled={isSyncingUsers}
-                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center gap-2 cursor-pointer transition-all disabled:opacity-60"
-              >
-                <RefreshCw size={14} className={isSyncingUsers ? 'animate-spin text-blue-600' : ''} />
-                <span>{isSyncingUsers ? 'Sincronizando...' : 'Refrescar Nube Ahora'}</span>
-              </button>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setIsSyncModalOpen(false);
-                }}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
-              >
-                Entendido / Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
         </motion.div>
       )}
     </AnimatePresence>
