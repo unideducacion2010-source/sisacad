@@ -18,7 +18,7 @@ import { subscribeToFirebaseStore, saveToFirebaseStore, loadFromFirebaseStore } 
 export interface AppUser {
   username: string;
   email: string;
-  role: 'Administrador' | 'Control Escolar' | 'Maestros' | 'Docente' | 'Secretaría' | 'Directivo' | 'Alumno';
+  role: 'Administrador' | 'Control Escolar' | 'Maestros' | 'Secretaría' | 'Directivo' | 'Alumno';
 }
 
 export interface SystemUser {
@@ -27,7 +27,7 @@ export interface SystemUser {
   password?: string;
   name: string;
   email: string;
-  role: 'Administrador' | 'Control Escolar' | 'Maestros' | 'Docente' | 'Secretaría' | 'Directivo' | 'Alumno';
+  role: 'Administrador' | 'Control Escolar' | 'Maestros' | 'Secretaría' | 'Directivo' | 'Alumno';
   status: 'Activo' | 'Inactivo';
   fechaRegistro?: string;
   lastAccess: string;
@@ -43,7 +43,7 @@ export default function App() {
       try {
         const u = JSON.parse(saved);
         if (u.role === 'Control Escolar' || u.role === 'Secretaría' || u.role === 'Directivo') return 'alumnos';
-        if (u.role === 'Maestros' || u.role === 'Docente') return 'calificaciones';
+        if (u.role === 'Maestros') return 'calificaciones';
         if (u.role === 'Alumno') return 'kardex-alumnos';
       } catch (e) {}
     }
@@ -151,6 +151,7 @@ export default function App() {
     }
 
     if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+      parsed = parsed.map(u => ((u.role as string) === 'Docente' ? { ...u, role: 'Maestros' as const } : u));
       const hasAdmin = parsed.some(u => u.username?.toLowerCase() === 'admin' || u.role === 'Administrador');
       if (!hasAdmin) {
         const fullList = [adminUser, ...parsed];
@@ -256,9 +257,10 @@ export default function App() {
       } = data;
 
       if (Array.isArray(serverUsers) && serverUsers.length > 0) {
+        const normalizedServerUsers = serverUsers.map((u: SystemUser) => ((u.role as string) === 'Docente' ? { ...u, role: 'Maestros' as const } : u));
         setSystemUsers(prev => {
           const mergedMap = new Map<string, SystemUser>();
-          serverUsers.forEach((u: SystemUser) => {
+          normalizedServerUsers.forEach((u: SystemUser) => {
             const key = (u.username || u.id).trim().toLowerCase();
             mergedMap.set(key, u);
           });
@@ -1060,7 +1062,7 @@ export default function App() {
   const [formMaestroLogin, setFormMaestroLogin] = useState('');
   const [formMaestroPassword, setFormMaestroPassword] = useState('');
   const [formMaestroEmail, setFormMaestroEmail] = useState('');
-  const [formMaestroRole, setFormMaestroRole] = useState<'Maestros' | 'Docente' | 'Directivo'>('Maestros');
+  const [formMaestroRole, setFormMaestroRole] = useState<'Maestros' | 'Directivo'>('Maestros');
   const [formMaestroStatus, setFormMaestroStatus] = useState<'Activo' | 'Inactivo'>('Activo');
 
   const handleOpenCreateMaestro = () => {
@@ -1080,7 +1082,7 @@ export default function App() {
     setFormMaestroLogin(teacher.username || '');
     setFormMaestroPassword(teacher.password || '');
     setFormMaestroEmail(teacher.email);
-    setFormMaestroRole((teacher.role === 'Maestros' || teacher.role === 'Directivo' ? teacher.role : 'Docente') as any);
+    setFormMaestroRole((teacher.role === 'Maestros' || teacher.role === 'Directivo' ? teacher.role : 'Maestros') as any);
     setFormMaestroStatus(teacher.status);
     setIsMaestroModalOpen(true);
   };
@@ -2429,9 +2431,32 @@ export default function App() {
       return exactPass || trimPass || adminPass;
     };
 
-    let foundUser = systemUsers.find(checkMatch);
+    // Always fetch fresh store data from Firebase Firestore / server before login to ensure mustChangePassword & firstLogin flags are 100% current across devices
+    let activeUsers = systemUsers;
+    try {
+      const cloudData = await loadFromFirebaseStore();
+      if (cloudData && Array.isArray(cloudData.systemUsers) && cloudData.systemUsers.length > 0) {
+        activeUsers = cloudData.systemUsers;
+        setSystemUsers(cloudData.systemUsers);
+        localStorage.setItem('sysacad_system_users_v2', JSON.stringify(cloudData.systemUsers));
+      } else {
+        const res = await fetchWithBridgeFallback('/api/system-store');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data && Array.isArray(json.data.systemUsers) && json.data.systemUsers.length > 0) {
+            activeUsers = json.data.systemUsers;
+            setSystemUsers(json.data.systemUsers);
+            localStorage.setItem('sysacad_system_users_v2', JSON.stringify(json.data.systemUsers));
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch fresh cloud users on login check:', err);
+    }
 
-    // If user is not yet in local React state (e.g. registered on PC, now opening on cellphone), fetch latest from server
+    let foundUser = activeUsers.find(checkMatch);
+
+    // If still not found, try fallback /api/users
     if (!foundUser) {
       try {
         const res = await fetchWithBridgeFallback('/api/users');
@@ -2646,7 +2671,7 @@ export default function App() {
     } else if (loggedInUser.role === 'Control Escolar' || loggedInUser.role === 'Secretaría') {
       setIsControlEscolarSubOpen(true);
       setCurrentView('alumnos');
-    } else if (loggedInUser.role === 'Maestros' || loggedInUser.role === 'Docente') {
+    } else if (loggedInUser.role === 'Maestros') {
       setIsMaestrosSubOpen(true);
       setCurrentView('calificaciones');
     } else if (loggedInUser.role === 'Alumno') {
@@ -5029,7 +5054,6 @@ export default function App() {
                           className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                         >
                           <option value="Maestros">Maestros (Portal Docente)</option>
-                          <option value="Docente">Docente</option>
                           <option value="Directivo">Directivo (Control Escolar y Maestros)</option>
                         </select>
                         <p className="text-[11px] text-slate-500 mt-1">
@@ -5951,7 +5975,6 @@ export default function App() {
                         <option value="administrador">Administrador</option>
                         <option value="control escolar">Control Escolar</option>
                         <option value="maestros">Maestros</option>
-                        <option value="docente">Docente</option>
                         <option value="secretaría">Secretaría</option>
                         <option value="directivo">Directivo</option>
                       </select>
@@ -6151,7 +6174,6 @@ export default function App() {
                               <option value="Control Escolar">Control Escolar (Solo Control Escolar)</option>
                               <option value="Secretaría">Secretaría (Solo Control Escolar)</option>
                               <option value="Maestros">Maestros (Portal Docente)</option>
-                              <option value="Docente">Docente</option>
                             </select>
                             <p className="text-[11px] text-slate-500 mt-1">
                               Directivo: control de Control Escolar y Maestros (Administrador y Kardex Alumnos apagados). Control Escolar / Secretaría: solo Control Escolar. Maestros: solo Maestros.
