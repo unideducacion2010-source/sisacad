@@ -267,22 +267,22 @@ export default function App() {
 
       if (Array.isArray(serverUsers) && serverUsers.length > 0) {
         const normalizedServerUsers = serverUsers.map((u: SystemUser) => ((u.role as string) === 'Docente' ? { ...u, role: 'Maestros' as const } : u));
-        setSystemUsers(prev => {
-          const mergedMap = new Map<string, SystemUser>();
-          normalizedServerUsers.forEach((u: SystemUser) => {
-            const key = (u.username || u.id).trim().toLowerCase();
-            mergedMap.set(key, u);
-          });
-          prev.forEach((u: SystemUser) => {
-            const key = (u.username || u.id).trim().toLowerCase();
-            if (!mergedMap.has(key)) {
-              mergedMap.set(key, u);
-            }
-          });
-          const combined = Array.from(mergedMap.values());
-          localStorage.setItem('sysacad_system_users_v2', JSON.stringify(combined));
-          return combined;
-        });
+        const hasAdmin = normalizedServerUsers.some(u => (u.username || '').toLowerCase() === 'admin' || u.role === 'Administrador');
+        const finalUsers = hasAdmin ? normalizedServerUsers : [{
+          id: '1',
+          username: 'admin',
+          password: 'admin123',
+          name: 'Administrador Principal',
+          email: 'admin@sysacad.edu',
+          role: 'Administrador' as const,
+          status: 'Activo' as const,
+          fechaRegistro: new Date().toISOString().split('T')[0],
+          lastAccess: 'Reciente',
+          mustChangePassword: false,
+          firstLogin: false
+        }, ...normalizedServerUsers];
+        setSystemUsers(finalUsers);
+        localStorage.setItem('sysacad_system_users_v2', JSON.stringify(finalUsers));
       }
 
       if (serverName) {
@@ -1857,17 +1857,9 @@ export default function App() {
         const json = await res.json();
         if (json.success && json.data && Array.isArray(json.data.systemUsers)) {
           const sUsers = json.data.systemUsers;
-          setSystemUsers(prev => {
-            const map = new Map<string, SystemUser>();
-            sUsers.forEach((u: SystemUser) => map.set((u.username || u.id).toLowerCase(), u));
-            prev.forEach((u: SystemUser) => {
-              const k = (u.username || u.id).toLowerCase();
-              if (!map.has(k)) map.set(k, u);
-            });
-            const comb = Array.from(map.values());
-            localStorage.setItem('sysacad_system_users_v2', JSON.stringify(comb));
-            return comb;
-          });
+          const normalized = sUsers.map((u: SystemUser) => ((u.role as string) === 'Docente' ? { ...u, role: 'Maestros' as const } : u));
+          setSystemUsers(normalized);
+          localStorage.setItem('sysacad_system_users_v2', JSON.stringify(normalized));
         }
       }
       playSuccessSound();
@@ -3345,22 +3337,9 @@ export default function App() {
           if (json?.success && json?.data) {
             const data = json.data;
             if (Array.isArray(data.systemUsers) && data.systemUsers.length > 0) {
-              setSystemUsers(prev => {
-                const mergedMap = new Map<string, SystemUser>();
-                prev.forEach(u => mergedMap.set((u.username || u.id).trim().toLowerCase(), u));
-                let hasChanges = false;
-                data.systemUsers.forEach((u: SystemUser) => {
-                  const k = (u.username || u.id).trim().toLowerCase();
-                  if (!mergedMap.has(k)) {
-                    hasChanges = true;
-                    mergedMap.set(k, u);
-                  }
-                });
-                if (!hasChanges && mergedMap.size === prev.length) return prev;
-                const updated = Array.from(mergedMap.values());
-                localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
-                return updated;
-              });
+              const normalizedServerUsers = data.systemUsers.map((u: SystemUser) => ((u.role as string) === 'Docente' ? { ...u, role: 'Maestros' as const } : u));
+              setSystemUsers(normalizedServerUsers);
+              localStorage.setItem('sysacad_system_users_v2', JSON.stringify(normalizedServerUsers));
             }
             if (data.workspaceResult && !workspaceResult) {
               setWorkspaceResult(data.workspaceResult);
@@ -6487,14 +6466,9 @@ export default function App() {
                           const json = await res.json();
                           if (json.success && json.data && Array.isArray(json.data.systemUsers)) {
                             const serverUsers = json.data.systemUsers;
-                            setSystemUsers(prev => {
-                              const map = new Map<string, SystemUser>();
-                              prev.forEach(u => map.set((u.username || u.id).toLowerCase(), u));
-                              serverUsers.forEach((u: SystemUser) => map.set((u.username || u.id).toLowerCase(), u));
-                              const combined = Array.from(map.values());
-                              localStorage.setItem('sysacad_system_users_v2', JSON.stringify(combined));
-                              return combined;
-                            });
+                            const normalizedServerUsers = serverUsers.map((u: SystemUser) => ((u.role as string) === 'Docente' ? { ...u, role: 'Maestros' as const } : u));
+                            setSystemUsers(normalizedServerUsers);
+                            localStorage.setItem('sysacad_system_users_v2', JSON.stringify(normalizedServerUsers));
                             playSuccessSound();
                             setManualSyncFeedback({
                               type: 'success',
