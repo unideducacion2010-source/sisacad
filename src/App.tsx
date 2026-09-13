@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound, UploadCloud, Smartphone, QrCode, Share2, Copy, Check, LogIn, AlertCircle } from 'lucide-react';
+import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound, UploadCloud, Smartphone, QrCode, Share2, Copy, Check, LogIn, AlertCircle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive, searchDriveFiles } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId, validateGoogleToken, clearInvalidToken } from './auth';
@@ -38,6 +38,11 @@ export interface SystemUser {
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentView, setCurrentView] = useState(() => {
+    const activeSessionFlag = sessionStorage.getItem('sysacad_active_session_flag');
+    if (!activeSessionFlag) {
+      localStorage.removeItem('sysacad_session_user');
+      return 'administrador';
+    }
     const saved = localStorage.getItem('sysacad_session_user');
     if (saved) {
       try {
@@ -613,6 +618,7 @@ export default function App() {
   const updateAlumnos = (newList: AlumnoItem[]) => {
     setAlumnosList(newList);
     localStorage.setItem('sysacad_alumnos_list', JSON.stringify(newList));
+    syncSystemStoreToServer({ alumnosList: newList });
   };
 
   const [selectedAlumnoName, setSelectedAlumnoName] = useState('');
@@ -812,6 +818,7 @@ export default function App() {
   const updateMaterias = (newList: MateriaItem[]) => {
     setMateriasList(newList);
     localStorage.setItem('sysacad_materias_list', JSON.stringify(newList));
+    syncSystemStoreToServer({ materiasList: newList });
   };
   
   // Avisos State
@@ -830,6 +837,7 @@ export default function App() {
   const updateAvisos = (newList: AvisoItem[]) => {
     setAvisosList(newList);
     localStorage.setItem('sysacad_avisos_list', JSON.stringify(newList));
+    syncSystemStoreToServer({ avisosList: newList });
   };
 
   const [isAvisoModalOpen, setIsAvisoModalOpen] = useState(false);
@@ -1236,6 +1244,7 @@ export default function App() {
   const updateCiclos = (newList: CicloEscolarItem[]) => {
     setCiclosList(newList);
     localStorage.setItem('sysacad_ciclos_list', JSON.stringify(newList));
+    syncSystemStoreToServer({ ciclosList: newList });
   };
 
   const [cicloSearchQuery, setCicloSearchQuery] = useState('');
@@ -2223,6 +2232,11 @@ export default function App() {
   });
 
   const [sessionUser, setSessionUser] = useState<SystemUser | null>(() => {
+    const activeSessionFlag = sessionStorage.getItem('sysacad_active_session_flag');
+    if (!activeSessionFlag) {
+      localStorage.removeItem('sysacad_session_user');
+      return null;
+    }
     const saved = localStorage.getItem('sysacad_session_user');
     if (saved) {
       try {
@@ -2237,6 +2251,11 @@ export default function App() {
     }
     return null;
   });
+
+  // Temporizador de inactividad de 10 minutos (600,000 ms) + Modal de advertencia
+  const [isIdleWarningOpen, setIsIdleWarningOpen] = useState(false);
+  const [idleCountdown, setIdleCountdown] = useState(60);
+  const lastActivityRef = useRef<number>(Date.now());
 
   const [loginMode, setLoginMode] = useState<'login' | 'forgot' | 'student' | 'first-login-change-password'>('login');
   
@@ -2542,6 +2561,8 @@ export default function App() {
     const activeUser = { ...foundUser, role: foundUser.username.toLowerCase() === 'admin' ? 'Administrador' : foundUser.role };
     setSessionUser(activeUser);
     localStorage.setItem('sysacad_session_user', JSON.stringify(activeUser));
+    sessionStorage.setItem('sysacad_active_session_flag', 'true');
+    lastActivityRef.current = Date.now();
 
     if (foundUser.role === 'Administrador') {
       setCurrentView('administrador');
@@ -2636,6 +2657,8 @@ export default function App() {
 
     setSessionUser(loggedInUser);
     localStorage.setItem('sysacad_session_user', JSON.stringify(loggedInUser));
+    sessionStorage.setItem('sysacad_active_session_flag', 'true');
+    lastActivityRef.current = Date.now();
 
     // Reset temporary states
     setNewPasswordInput('');
@@ -2751,20 +2774,92 @@ export default function App() {
 
     setSessionUser(studentUser);
     localStorage.setItem('sysacad_session_user', JSON.stringify(studentUser));
+    sessionStorage.setItem('sysacad_active_session_flag', 'true');
+    lastActivityRef.current = Date.now();
     setCurrentView('kardex-alumnos');
     setStudentName('');
   };
 
   const handleLocalLogout = () => {
     playLogoutSound();
+    setIsIdleWarningOpen(false);
     setSessionUser(null);
     localStorage.removeItem('sysacad_session_user');
+    sessionStorage.removeItem('sysacad_active_session_flag');
     setLoginUsername('');
     setLoginPassword('');
     setLoginCaptchaInput('');
     setLoginError('');
     setLoginSuccess('');
     setLoginMode('login');
+  };
+
+  const resetInactivityTimer = useCallback(() => {
+    if (!isIdleWarningOpen) {
+      lastActivityRef.current = Date.now();
+    }
+  }, [isIdleWarningOpen]);
+
+  // Escuchar eventos de interacción del usuario para resetear el timer de inactividad
+  useEffect(() => {
+    if (!sessionUser) return;
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    const handleUserActivity = () => {
+      resetInactivityTimer();
+    };
+
+    events.forEach(evt => window.addEventListener(evt, handleUserActivity, { passive: true }));
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, handleUserActivity));
+    };
+  }, [sessionUser, resetInactivityTimer]);
+
+  // Monitorear inactividad continua (10 minutos = 600,000 ms)
+  useEffect(() => {
+    if (!sessionUser) {
+      setIsIdleWarningOpen(false);
+      return;
+    }
+
+    const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutos
+
+    const interval = setInterval(() => {
+      if (isIdleWarningOpen) return;
+      const now = Date.now();
+      if (now - lastActivityRef.current >= INACTIVITY_TIMEOUT_MS) {
+        setIsIdleWarningOpen(true);
+        setIdleCountdown(60); // 60 segundos de gracia antes de cierre de sesión
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [sessionUser, isIdleWarningOpen]);
+
+  // Cuenta regresiva del aviso de inactividad
+  useEffect(() => {
+    if (!isIdleWarningOpen) return;
+
+    const countdownInterval = setInterval(() => {
+      setIdleCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          setIsIdleWarningOpen(false);
+          handleLocalLogout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(countdownInterval);
+  }, [isIdleWarningOpen]);
+
+  const handleStayLoggedIn = () => {
+    lastActivityRef.current = Date.now();
+    setIsIdleWarningOpen(false);
+    setIdleCountdown(60);
+    playClickSound();
   };
 
   const isMenuAllowed = (menuId: string): boolean => {
@@ -3277,6 +3372,8 @@ export default function App() {
 
         setSessionUser(googleSysUser);
         localStorage.setItem('sysacad_session_user', JSON.stringify(googleSysUser));
+        sessionStorage.setItem('sysacad_active_session_flag', 'true');
+        lastActivityRef.current = Date.now();
         setCurrentView('administrador');
 
         if (result.user.email) {
@@ -6531,6 +6628,8 @@ export default function App() {
                     };
                     setSessionUser(studentUser);
                     localStorage.setItem('sysacad_session_user', JSON.stringify(studentUser));
+                    sessionStorage.setItem('sysacad_active_session_flag', 'true');
+                    lastActivityRef.current = Date.now();
                     setCurrentView('kardex-alumnos');
                   }}
                   className="flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] text-slate-400 hover:text-white"
@@ -7585,6 +7684,64 @@ export default function App() {
         playClickSound={playClickSound}
         playSuccessSound={playSuccessSound}
       />
+
+      {/* Modal de Advertencia por Inactividad (10 minutos) */}
+      <AnimatePresence>
+        {isIdleWarningOpen && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-5"
+            >
+              <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-amber-400 animate-pulse">
+                <Clock size={32} />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-white">¿Desea seguir trabajando?</h3>
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  Ha transcurrido más de <span className="font-semibold text-amber-400">10 minutos sin actividad</span> en el sistema SysAcad.
+                </p>
+                <p className="text-xs text-slate-400">
+                  Por seguridad, su sesión se cerrará automáticamente si no confirma su presencia.
+                </p>
+              </div>
+
+              {/* Temporizador de Cuenta Regresiva */}
+              <div className="bg-slate-800/80 border border-slate-700 rounded-xl py-3 px-4 flex items-center justify-center gap-2 text-slate-200">
+                <AlertTriangle size={18} className="text-amber-400 shrink-0" />
+                <span className="text-xs font-medium">Cierre automático en:</span>
+                <span className="text-base font-extrabold text-amber-400 font-mono w-10 text-center">
+                  {idleCountdown}s
+                </span>
+              </div>
+
+              {/* Botones de Acción */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleStayLoggedIn}
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 cursor-pointer text-sm"
+                >
+                  <CheckCircle2 size={18} />
+                  <span>Sí, seguir trabajando</span>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={handleLocalLogout}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 px-4 rounded-xl transition-all border border-slate-700 flex items-center justify-center gap-2 cursor-pointer text-sm"
+                >
+                  <LogOut size={16} />
+                  <span>Cerrar Sesión</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
 
         </motion.div>
