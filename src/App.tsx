@@ -213,38 +213,6 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
-    // Immediately push any local state (users, alumnos, materias, etc.) to server/Firebase so server store is always fresh
-    const savedLocal = localStorage.getItem('sysacad_system_users_v2') || localStorage.getItem('sysacad_system_users');
-    const localName = localStorage.getItem('sysacad_institution_name');
-    const localLogo = localStorage.getItem('sysacad_institution_logo');
-    const localAlumnos = localStorage.getItem('sysacad_alumnos_list');
-    const localMaterias = localStorage.getItem('sysacad_materias_list');
-    const localCalifs = localStorage.getItem('sysacad_calificaciones_list');
-    const localAvisos = localStorage.getItem('sysacad_avisos_list');
-    const localCiclos = localStorage.getItem('sysacad_ciclos_list');
-
-    const fullPayload: Record<string, any> = {};
-    if (savedLocal) {
-      try {
-        const parsed = JSON.parse(savedLocal);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          syncUsersToServer(parsed);
-          fullPayload.systemUsers = parsed;
-        }
-      } catch (e) {}
-    }
-    if (localName) fullPayload.institutionName = localName;
-    if (localLogo) fullPayload.institutionLogo = localLogo;
-    if (localAlumnos) { try { fullPayload.alumnosList = JSON.parse(localAlumnos); } catch(e){} }
-    if (localMaterias) { try { fullPayload.materiasList = JSON.parse(localMaterias); } catch(e){} }
-    if (localCalifs) { try { fullPayload.calificacionesList = JSON.parse(localCalifs); } catch(e){} }
-    if (localAvisos) { try { fullPayload.avisosList = JSON.parse(localAvisos); } catch(e){} }
-    if (localCiclos) { try { fullPayload.ciclosList = JSON.parse(localCiclos); } catch(e){} }
-
-    if (Object.keys(fullPayload).length > 0) {
-      syncSystemStoreToServer(fullPayload);
-    }
-
     const applyServerData = (data: any) => {
       if (!isMounted || !data) return;
 
@@ -265,7 +233,7 @@ export default function App() {
         customClientId: serverClientId
       } = data;
 
-      if (Array.isArray(serverUsers) && serverUsers.length > 0) {
+      if (Array.isArray(serverUsers)) {
         const normalizedServerUsers = serverUsers.map((u: SystemUser) => ((u.role as string) === 'Docente' ? { ...u, role: 'Maestros' as const } : u));
         const hasAdmin = normalizedServerUsers.some(u => (u.username || '').toLowerCase() === 'admin' || u.role === 'Administrador');
         const finalUsers = hasAdmin ? normalizedServerUsers : [{
@@ -1196,8 +1164,16 @@ export default function App() {
       localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
       syncUsersToServer(updated);
       syncSystemStoreToServer({ systemUsers: updated });
-      if (token && workspaceResult?.spreadsheetId) {
-        syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
+      let activeToken = token || localStorage.getItem('sysacad_google_access_token');
+      let activeSheetId = workspaceResult?.spreadsheetId;
+      if (!activeSheetId) {
+        const savedRaw = localStorage.getItem('sysacad_workspace_result');
+        if (savedRaw) {
+          try { activeSheetId = JSON.parse(savedRaw)?.spreadsheetId; } catch(e) {}
+        }
+      }
+      if (activeToken && activeSheetId) {
+        syncUsersToSheet(activeToken, activeSheetId, updated).catch(console.error);
       }
     }
   };
@@ -2222,8 +2198,16 @@ export default function App() {
       localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
       syncUsersToServer(updated);
       syncSystemStoreToServer({ systemUsers: updated });
-      if (token && workspaceResult?.spreadsheetId) {
-        syncUsersToSheet(token, workspaceResult.spreadsheetId, updated).catch(console.error);
+      let activeToken = token || localStorage.getItem('sysacad_google_access_token');
+      let activeSheetId = workspaceResult?.spreadsheetId;
+      if (!activeSheetId) {
+        const savedRaw = localStorage.getItem('sysacad_workspace_result');
+        if (savedRaw) {
+          try { activeSheetId = JSON.parse(savedRaw)?.spreadsheetId; } catch(e) {}
+        }
+      }
+      if (activeToken && activeSheetId) {
+        syncUsersToSheet(activeToken, activeSheetId, updated).catch(console.error);
       }
     }
   };
@@ -3361,41 +3345,6 @@ export default function App() {
         }
       } catch (err) {
         // Silent catch for background poll
-      }
-
-      // 2. If Google token & sheetId are active, also sync with Google Sheets
-      const activeToken = token || localStorage.getItem('sysacad_google_access_token');
-      const wsRaw = localStorage.getItem('sysacad_workspace_result');
-      const currentSheetId = workspaceResult?.spreadsheetId || (wsRaw ? JSON.parse(wsRaw)?.spreadsheetId : null);
-
-      if (activeToken && currentSheetId) {
-        try {
-          const fetched = await fetchUsersFromSheets(activeToken, currentSheetId);
-          if (Array.isArray(fetched) && fetched.length > 0) {
-            setSystemUsers(prev => {
-              const mergedMap = new Map<string, SystemUser>();
-              prev.forEach(u => mergedMap.set((u.username || u.id).trim().toLowerCase(), u));
-              let hasNew = false;
-              fetched.forEach(u => {
-                const k = (u.username || u.id).trim().toLowerCase();
-                if (!mergedMap.has(k)) {
-                  hasNew = true;
-                }
-                mergedMap.set(k, { ...(mergedMap.get(k) || {}), ...u });
-              });
-              if (!hasNew && mergedMap.size === prev.length) {
-                return prev;
-              }
-              const updated = Array.from(mergedMap.values());
-              localStorage.setItem('sysacad_system_users_v2', JSON.stringify(updated));
-              syncUsersToServer(updated);
-              syncSystemStoreToServer({ systemUsers: updated });
-              return updated;
-            });
-          }
-        } catch (err) {
-          // Silent background catch
-        }
       }
     };
 
