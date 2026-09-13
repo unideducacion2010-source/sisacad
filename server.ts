@@ -85,20 +85,9 @@ function saveSystemStore(newData: any) {
   const current = getSystemStore();
   const merged = { ...current, ...newData };
   
-  // Merge users safely
+  // Respect user deletions by using newData.systemUsers directly if provided
   if (Array.isArray(newData.systemUsers)) {
-    const userMap = new Map();
-    if (Array.isArray(current.systemUsers)) {
-      current.systemUsers.forEach((u: any) => {
-        const key = (u.username || u.id || '').trim().toLowerCase();
-        if (key) userMap.set(key, u);
-      });
-    }
-    newData.systemUsers.forEach((u: any) => {
-      const key = (u.username || u.id || '').trim().toLowerCase();
-      if (key) userMap.set(key, u);
-    });
-    merged.systemUsers = Array.from(userMap.values());
+    merged.systemUsers = newData.systemUsers;
   }
 
   // Ensure admin user is never lost

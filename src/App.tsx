@@ -151,7 +151,16 @@ export default function App() {
     }
 
     if (parsed && Array.isArray(parsed) && parsed.length > 0) {
-      parsed = parsed.map(u => ((u.role as string) === 'Docente' ? { ...u, role: 'Maestros' as const } : u));
+      parsed = parsed.map(u => {
+        const isAdm = (u.username || '').toLowerCase() === 'admin' || (u.username || '').toLowerCase() === 'administrador' || u.role === 'Administrador';
+        return {
+          ...u,
+          role: (u.role as string) === 'Docente' ? 'Maestros' as const : u.role,
+          lastAccess: isAdm ? (u.lastAccess || 'Reciente') : 'Nunca',
+          mustChangePassword: isAdm ? false : true,
+          firstLogin: isAdm ? false : true
+        };
+      });
       const hasAdmin = parsed.some(u => u.username?.toLowerCase() === 'admin' || u.role === 'Administrador');
       if (!hasAdmin) {
         const fullList = [adminUser, ...parsed];
@@ -2527,16 +2536,9 @@ export default function App() {
       return;
     }
 
-    // CHECK IF FIRST TIME LOGIN OR PASSWORD CHANGE REQUIRED
-    const isNonAdmin = foundUser.username.toLowerCase() !== 'admin' && foundUser.username.toLowerCase() !== 'control' && foundUser.username.toLowerCase() !== 'maestro';
-    const requiresPasswordChange = Boolean(
-      isNonAdmin && (
-        foundUser.mustChangePassword === true || 
-        foundUser.mustChangePassword === undefined || 
-        foundUser.firstLogin === true || 
-        foundUser.lastAccess === 'Nunca'
-      )
-    );
+    // CHECK IF FIRST TIME LOGIN OR PASSWORD CHANGE REQUIRED (Only admin bypasses password change)
+    const isNonAdmin = foundUser.username.toLowerCase() !== 'admin' && foundUser.username.toLowerCase() !== 'administrador';
+    const requiresPasswordChange = isNonAdmin;
 
     if (requiresPasswordChange) {
       playClickSound();
