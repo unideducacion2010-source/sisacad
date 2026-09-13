@@ -6,16 +6,28 @@
   "folderLink": null,
   "reportsFolderLink": null,
   "sheetLink": null,
+  "customClientId": "",
   "systemUsers": [
     {
       "id": "1",
       "username": "admin",
-      "name": "Admin"
+      "name": "Admin",
+      "lastAccess": "Ahora",
+      "mustChangePassword": false,
+      "firstLogin": false,
+      "role": "Administrador"
     },
     {
       "id": "2",
       "username": "testuser",
       "name": "Test User"
+    },
+    {
+      "id": "test-1",
+      "username": "profesor_demo",
+      "name": "Profesor Demo",
+      "role": "Docente",
+      "status": "Activo"
     }
   ],
   "alumnosList": [],

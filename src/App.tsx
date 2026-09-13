@@ -11,6 +11,9 @@ import { CalificacionesModal } from './components/CalificacionesModal';
 import { DirectTablePrintModal, TablePrintType } from './components/DirectTablePrintModal';
 import { PasswordStrengthMeter, evaluatePasswordStrength } from './components/PasswordStrengthMeter';
 import { User } from 'firebase/auth';
+import { encodeSyncPayload, decodeSyncPayload, generateMobileSyncUrl, extractSyncPayloadFromUrl } from './syncBridge';
+
+import { subscribeToFirebaseStore, saveToFirebaseStore, loadFromFirebaseStore } from './firebase';
 
 export interface AppUser {
   username: string;
@@ -113,6 +116,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: payload
       }).catch(() => {});
+      saveToFirebaseStore(data).catch(() => {});
     } catch (err) {
       console.warn('Could not sync system store to server:', err);
     }
@@ -161,160 +165,194 @@ export default function App() {
     return [adminUser];
   });
 
-  // Load and synchronize shared server store across all devices (PC, Laptop, Cellphone)
+  const [incomingSyncToast, setIncomingSyncToast] = useState<string | null>(null);
+
+  // 1. Process instant URL payload synchronization when opening via QR or shared link (#sync=...)
+  useEffect(() => {
+    const payload = extractSyncPayloadFromUrl();
+    if (payload && Array.isArray(payload.users) && payload.users.length > 0) {
+      const incoming = payload.users;
+      setSystemUsers(prev => {
+        const map = new Map<string, SystemUser>();
+        prev.forEach(u => map.set((u.username || u.id).toLowerCase(), u));
+        incoming.forEach((u: SystemUser) => map.set((u.username || u.id).toLowerCase(), u));
+        const merged = Array.from(map.values());
+        localStorage.setItem('sysacad_system_users_v2', JSON.stringify(merged));
+        syncUsersToServer(merged);
+        syncSystemStoreToServer({ systemUsers: merged });
+        return merged;
+      });
+
+      if (payload.institutionName) {
+        setInstitutionName(payload.institutionName);
+        localStorage.setItem('sysacad_institution_name', payload.institutionName);
+      }
+
+      playSuccessSound();
+      setIncomingSyncToast(`🎉 ¡Sincronización Exitosa! Se importaron ${incoming.length} cuentas de usuario desde la PC (Admin, Docentes y Control Escolar). Ya puedes iniciar sesión.`);
+      setTimeout(() => setIncomingSyncToast(null), 9000);
+
+      // Clean the URL so the hash doesn't stay visible in the address bar
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
+  }, []);
+
+  // 2. Load and synchronize shared server store across all devices (PC, Laptop, Cellphone)
   useEffect(() => {
     let isMounted = true;
+
+    // Immediately push any local users to server so server store is always fresh
+    const savedLocal = localStorage.getItem('sysacad_system_users_v2') || localStorage.getItem('sysacad_system_users');
+    if (savedLocal) {
+      try {
+        const parsed = JSON.parse(savedLocal);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          syncUsersToServer(parsed);
+          syncSystemStoreToServer({ systemUsers: parsed });
+        }
+      } catch (e) {}
+    }
+
+    const applyServerData = (data: any) => {
+      if (!isMounted || !data) return;
+
+      const { 
+        systemUsers: serverUsers, 
+        institutionName: serverName, 
+        institutionLogo: serverLogo,
+        alumnosList: serverAlumnos,
+        materiasList: serverMaterias,
+        calificacionesList: serverCalifs,
+        avisosList: serverAvisos,
+        ciclosList: serverCiclos,
+        workspaceResult: serverWorkspace,
+        folderLink: serverFolderLink,
+        reportsFolderLink: serverReportsFolderLink,
+        sheetLink: serverSheetLink,
+        adminEmail: serverAdminEmail,
+        customClientId: serverClientId
+      } = data;
+
+      if (Array.isArray(serverUsers) && serverUsers.length > 0) {
+        setSystemUsers(prev => {
+          const mergedMap = new Map<string, SystemUser>();
+          serverUsers.forEach((u: SystemUser) => {
+            const key = (u.username || u.id).trim().toLowerCase();
+            mergedMap.set(key, u);
+          });
+          prev.forEach((u: SystemUser) => {
+            const key = (u.username || u.id).trim().toLowerCase();
+            if (!mergedMap.has(key)) {
+              mergedMap.set(key, u);
+            }
+          });
+          const combined = Array.from(mergedMap.values());
+          localStorage.setItem('sysacad_system_users_v2', JSON.stringify(combined));
+          return combined;
+        });
+      }
+
+      if (serverName) {
+        setInstitutionName(serverName);
+        localStorage.setItem('sysacad_institution_name', serverName);
+      }
+
+      if (serverLogo) {
+        setInstitutionLogo(serverLogo);
+        localStorage.setItem('sysacad_institution_logo', serverLogo);
+      }
+
+      if (serverWorkspace) {
+        setWorkspaceResult(serverWorkspace);
+        localStorage.setItem('sysacad_workspace_result', JSON.stringify(serverWorkspace));
+      }
+
+      if (serverFolderLink) {
+        setFolderLink(serverFolderLink);
+        localStorage.setItem('sysacad_folder_link', serverFolderLink);
+      }
+
+      if (serverReportsFolderLink) {
+        setReportsFolderLink(serverReportsFolderLink);
+        localStorage.setItem('sysacad_reports_folder_link', serverReportsFolderLink);
+      }
+
+      if (serverSheetLink) {
+        setSheetLink(serverSheetLink);
+        localStorage.setItem('sysacad_sheet_link', serverSheetLink);
+      }
+
+      if (serverAdminEmail) {
+        setAdminEmail(serverAdminEmail);
+        localStorage.setItem('sysacad_admin_email', serverAdminEmail);
+      }
+
+      if (Array.isArray(serverAlumnos) && serverAlumnos.length > 0) {
+        setAlumnosList(serverAlumnos);
+        localStorage.setItem('sysacad_alumnos_list', JSON.stringify(serverAlumnos));
+      }
+      if (Array.isArray(serverMaterias) && serverMaterias.length > 0) {
+        setMateriasList(serverMaterias);
+        localStorage.setItem('sysacad_materias_list', JSON.stringify(serverMaterias));
+      }
+      if (Array.isArray(serverCalifs) && serverCalifs.length > 0) {
+        setCalificacionesList(serverCalifs);
+        localStorage.setItem('sysacad_calificaciones_list', JSON.stringify(serverCalifs));
+      }
+      if (Array.isArray(serverAvisos) && serverAvisos.length > 0) {
+        setAvisosList(serverAvisos);
+        localStorage.setItem('sysacad_avisos_list', JSON.stringify(serverAvisos));
+      }
+      if (Array.isArray(serverCiclos) && serverCiclos.length > 0) {
+        setCiclosList(serverCiclos);
+        localStorage.setItem('sysacad_ciclos_list', JSON.stringify(serverCiclos));
+      }
+
+      if (serverClientId && serverClientId.trim()) {
+        setCustomClientId(serverClientId.trim());
+        setCustomClientIdInput(serverClientId.trim());
+      }
+    };
+
+    // Initial load from Firebase Firestore
+    loadFromFirebaseStore().then(data => {
+      if (data) applyServerData(data);
+    });
+
+    // Real-time listener for Firebase Firestore changes across all connected devices (PC, Mobile)
+    const unsubscribeFirebase = subscribeToFirebaseStore(data => {
+      if (data) applyServerData(data);
+    });
+
     const fetchSharedServerStore = async () => {
       try {
         const res = await fetchWithBridgeFallback('/api/system-store');
         if (!res.ok) return;
         const json = await res.json();
         if (!isMounted || !json.success || !json.data) return;
-
-        const { 
-          systemUsers: serverUsers, 
-          institutionName: serverName, 
-          institutionLogo: serverLogo,
-          alumnosList: serverAlumnos,
-          materiasList: serverMaterias,
-          calificacionesList: serverCalifs,
-          avisosList: serverAvisos,
-          ciclosList: serverCiclos,
-          workspaceResult: serverWorkspace,
-          folderLink: serverFolderLink,
-          reportsFolderLink: serverReportsFolderLink,
-          sheetLink: serverSheetLink,
-          adminEmail: serverAdminEmail
-        } = json.data;
-
-        if (Array.isArray(serverUsers) && serverUsers.length > 0) {
-          setSystemUsers(prev => {
-            const mergedMap = new Map<string, SystemUser>();
-            // Load server users first so they populate mobile devices immediately
-            serverUsers.forEach((u: SystemUser) => {
-              const key = (u.username || u.id).trim().toLowerCase();
-              mergedMap.set(key, u);
-            });
-            // Merge any locally added users from this device
-            prev.forEach((u: SystemUser) => {
-              const key = (u.username || u.id).trim().toLowerCase();
-              if (!mergedMap.has(key)) {
-                mergedMap.set(key, u);
-              }
-            });
-            const combined = Array.from(mergedMap.values());
-            localStorage.setItem('sysacad_system_users_v2', JSON.stringify(combined));
-            return combined;
-          });
-        }
-
-        if (serverName) {
-          setInstitutionName(serverName);
-          localStorage.setItem('sysacad_institution_name', serverName);
-        }
-
-        if (serverLogo) {
-          setInstitutionLogo(serverLogo);
-          localStorage.setItem('sysacad_institution_logo', serverLogo);
-        }
-
-        if (serverWorkspace) {
-          setWorkspaceResult(serverWorkspace);
-          localStorage.setItem('sysacad_workspace_result', JSON.stringify(serverWorkspace));
-        }
-
-        if (serverFolderLink) {
-          setFolderLink(serverFolderLink);
-          localStorage.setItem('sysacad_folder_link', serverFolderLink);
-        }
-
-        if (serverReportsFolderLink) {
-          setReportsFolderLink(serverReportsFolderLink);
-          localStorage.setItem('sysacad_reports_folder_link', serverReportsFolderLink);
-        }
-
-        if (serverSheetLink) {
-          setSheetLink(serverSheetLink);
-          localStorage.setItem('sysacad_sheet_link', serverSheetLink);
-        }
-
-        if (serverAdminEmail) {
-          setAdminEmail(serverAdminEmail);
-          localStorage.setItem('sysacad_admin_email', serverAdminEmail);
-        }
-
-        if (Array.isArray(serverAlumnos) && serverAlumnos.length > 0) {
-          setAlumnosList(serverAlumnos);
-          localStorage.setItem('sysacad_alumnos_list', JSON.stringify(serverAlumnos));
-        }
-        if (Array.isArray(serverMaterias) && serverMaterias.length > 0) {
-          setMateriasList(serverMaterias);
-          localStorage.setItem('sysacad_materias_list', JSON.stringify(serverMaterias));
-        }
-        if (Array.isArray(serverCalifs) && serverCalifs.length > 0) {
-          setCalificacionesList(serverCalifs);
-          localStorage.setItem('sysacad_calificaciones_list', JSON.stringify(serverCalifs));
-        }
-        if (Array.isArray(serverAvisos) && serverAvisos.length > 0) {
-          setAvisosList(serverAvisos);
-          localStorage.setItem('sysacad_avisos_list', JSON.stringify(serverAvisos));
-        }
-        if (Array.isArray(serverCiclos) && serverCiclos.length > 0) {
-          setCiclosList(serverCiclos);
-          localStorage.setItem('sysacad_ciclos_list', JSON.stringify(serverCiclos));
-        }
-
-        // Push local pre-existing data (from PC) to server if server doesn't have it yet
-        const localSavedUsersRaw = 
-          localStorage.getItem('sysacad_system_users_v2') || 
-          localStorage.getItem('sysacad_system_users') || 
-          localStorage.getItem('sysacad_users');
-        const localWorkspaceRaw = localStorage.getItem('sysacad_workspace_result');
-        const localFolderLink = localStorage.getItem('sysacad_folder_link');
-        const localSheetLink = localStorage.getItem('sysacad_sheet_link');
-        const localAdminEmail = localStorage.getItem('sysacad_admin_email');
-
-        const payloadToSync: any = {};
-        if (localSavedUsersRaw) {
-          try {
-            const parsedUsers = JSON.parse(localSavedUsersRaw);
-            if (Array.isArray(parsedUsers) && parsedUsers.length > 0) {
-              const nonAdmin = parsedUsers.filter((u: any) => u.username?.toLowerCase() !== 'admin');
-              const serverNonAdmin = Array.isArray(serverUsers) ? serverUsers.filter((u: any) => u.username?.toLowerCase() !== 'admin') : [];
-              if (nonAdmin.length > 0 && nonAdmin.length >= serverNonAdmin.length) {
-                payloadToSync.systemUsers = parsedUsers;
-              }
-            }
-          } catch(e) {}
-        }
-        if ((!serverWorkspace || !serverWorkspace.spreadsheetId) && (localWorkspaceRaw || localSheetLink || localFolderLink)) {
-          try {
-            if (localWorkspaceRaw) payloadToSync.workspaceResult = JSON.parse(localWorkspaceRaw);
-            if (localFolderLink) payloadToSync.folderLink = localFolderLink;
-            if (localSheetLink) payloadToSync.sheetLink = localSheetLink;
-            if (localAdminEmail) payloadToSync.adminEmail = localAdminEmail;
-          } catch(e) {}
-        }
-
-        const localCustomClientId = localStorage.getItem('sysacad_custom_google_client_id');
-        if (json.data.customClientId && json.data.customClientId.trim()) {
-          setCustomClientId(json.data.customClientId.trim());
-          setCustomClientIdInput(json.data.customClientId.trim());
-        } else if (localCustomClientId && localCustomClientId.trim()) {
-          payloadToSync.customClientId = localCustomClientId.trim();
-        }
-
-        if (Object.keys(payloadToSync).length > 0) {
-          syncSystemStoreToServer(payloadToSync);
-        }
+        applyServerData(json.data);
       } catch (err) {
         console.warn('Network sync with server store skipped/offline:', err);
       }
     };
 
     fetchSharedServerStore();
+    const intervalId = setInterval(fetchSharedServerStore, 6000);
+    const onWindowFocus = () => {
+      fetchSharedServerStore();
+    };
+    window.addEventListener('focus', onWindowFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') fetchSharedServerStore();
+    });
+
     return () => {
       isMounted = false;
+      clearInterval(intervalId);
+      window.removeEventListener('focus', onWindowFocus);
+      unsubscribeFirebase();
     };
   }, []);
 
@@ -1690,6 +1728,10 @@ export default function App() {
   const [isSyncingUsers, setIsSyncingUsers] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [copiedCellUrl, setCopiedCellUrl] = useState(false);
+  const [copiedSyncCode, setCopiedSyncCode] = useState(false);
+  const [isManualSyncModalOpen, setIsManualSyncModalOpen] = useState(false);
+  const [manualSyncCodeInput, setManualSyncCodeInput] = useState('');
+  const [manualSyncFeedback, setManualSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [syncFeedbackMessage, setSyncFeedbackMessage] = useState<string | null>(null);
   const [customMobileUrl, setCustomMobileUrl] = useState<string>(() => {
     try {
@@ -1709,6 +1751,65 @@ export default function App() {
       href = href.replace('ais-dev-', 'ais-pre-');
     }
     return href;
+  };
+
+  const getMobileSyncUrl = () => {
+    const base = getPublicMobileUrl();
+    return generateMobileSyncUrl(base, {
+      users: systemUsers,
+      institutionName,
+      institutionLogo,
+      adminEmail
+    });
+  };
+
+  const getSystemSyncCode = () => {
+    return encodeSyncPayload({
+      users: systemUsers,
+      institutionName,
+      institutionLogo,
+      adminEmail
+    });
+  };
+
+  const handleApplyManualSyncCode = (codeToApply: string) => {
+    const payload = decodeSyncPayload(codeToApply);
+    if (!payload || !Array.isArray(payload.users) || payload.users.length === 0) {
+      setManualSyncFeedback({
+        type: 'error',
+        message: 'Código de sincronización no válido o dañado. Asegúrese de copiar el código completo desde la PC.'
+      });
+      playErrorSound();
+      return;
+    }
+
+    const importedUsers: SystemUser[] = payload.users;
+    setSystemUsers(prev => {
+      const map = new Map<string, SystemUser>();
+      prev.forEach(u => map.set((u.username || u.id).toLowerCase(), u));
+      importedUsers.forEach(u => map.set((u.username || u.id).toLowerCase(), u));
+      const merged = Array.from(map.values());
+      localStorage.setItem('sysacad_system_users_v2', JSON.stringify(merged));
+      syncUsersToServer(merged);
+      syncSystemStoreToServer({ systemUsers: merged });
+      return merged;
+    });
+
+    if (payload.institutionName) {
+      setInstitutionName(payload.institutionName);
+      localStorage.setItem('sysacad_institution_name', payload.institutionName);
+    }
+
+    playSuccessSound();
+    setManualSyncFeedback({
+      type: 'success',
+      message: `¡Éxito! Se sincronizaron e importaron ${importedUsers.length} cuentas de usuario. Ya puedes iniciar sesión.`
+    });
+    setTimeout(() => {
+      setIsManualSyncModalOpen(false);
+      setManualSyncFeedback(null);
+      setManualSyncCodeInput('');
+    }, 2200);
   };
 
   const handleForceCloudSync = async () => {
@@ -6223,9 +6324,191 @@ export default function App() {
   };
 
   return (
-    <AnimatePresence mode="wait">
-      {!sessionUser ? (
-        <motion.div
+    <div className="relative min-h-screen">
+      {/* Real-time sync feedback toast */}
+      {incomingSyncToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] max-w-lg w-[92%] bg-emerald-600 text-white px-4 py-3.5 rounded-2xl shadow-2xl border border-emerald-400 flex items-start gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <CheckCircle2 size={22} className="shrink-0 mt-0.5 text-emerald-100" />
+          <div className="flex-1 text-xs font-semibold leading-relaxed">{incomingSyncToast}</div>
+          <button onClick={() => setIncomingSyncToast(null)} className="p-1 hover:bg-white/20 rounded-lg cursor-pointer">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Manual sync modal (usable from login screen or anywhere) */}
+      {isManualSyncModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-700 to-indigo-700 text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
+                  <Smartphone size={20} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Sincronizar Usuarios en este Dispositivo</h3>
+                  <p className="text-xs text-blue-100">Importa tus docentes y usuarios registrados desde la PC</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setIsManualSyncModalOpen(false);
+                  setManualSyncFeedback(null);
+                }}
+                className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg cursor-pointer transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              {/* Status of current device users */}
+              <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Usuarios disponibles en este celular:
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                    {systemUsers.length} {systemUsers.length === 1 ? 'cuenta' : 'cuentas'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1">
+                  {systemUsers.map((u) => (
+                    <span
+                      key={u.id || u.username}
+                      className="px-2.5 py-1 rounded-lg text-xs font-mono bg-slate-800/80 border border-slate-700 text-slate-200 flex items-center gap-1.5"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      <strong>{u.username}</strong>
+                      <span className="text-[10px] text-slate-400 font-sans">({u.role})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Feedback message */}
+              {manualSyncFeedback && (
+                <div
+                  className={`p-3.5 rounded-xl text-xs font-medium flex items-start gap-2.5 ${
+                    manualSyncFeedback.type === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                      : 'bg-red-500/10 border border-red-500/30 text-red-300'
+                  }`}
+                >
+                  {manualSyncFeedback.type === 'success' ? (
+                    <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-400" />
+                  ) : (
+                    <AlertTriangle size={16} className="shrink-0 mt-0.5 text-red-400" />
+                  )}
+                  <span>{manualSyncFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Option 1: Paste Sync Code or URL */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                  Opción 1: Pegar Código o Enlace desde tu PC
+                </label>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  En tu PC, abre el botón <strong>"Vincular con Celular"</strong> y pulsa <em>"Copiar Código"</em> o <em>"Copiar Enlace"</em>. Pégalo aquí abajo:
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={manualSyncCodeInput}
+                    onChange={(e) => setManualSyncCodeInput(e.target.value)}
+                    placeholder="Pega aquí el enlace o código (ej. eyJ1c2V...)..."
+                    className="flex-1 px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder:text-slate-600 outline-none focus:border-blue-500"
+                  />
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      handleApplyManualSyncCode(manualSyncCodeInput);
+                    }}
+                    disabled={!manualSyncCodeInput.trim()}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-md cursor-pointer shrink-0"
+                  >
+                    Importar
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 2: Fetch from server */}
+              <div className="pt-3 border-t border-slate-800/80 space-y-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                  Opción 2: Consultar Servidor Central / Nube
+                </label>
+                <div className="flex items-center justify-between gap-3 bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400">
+                    Descarga los usuarios registrados en el servidor central:
+                  </span>
+                  <button
+                    onClick={async () => {
+                      playClickSound();
+                      setIsSyncingUsers(true);
+                      try {
+                        const res = await fetchWithBridgeFallback('/api/system-store');
+                        if (res.ok) {
+                          const json = await res.json();
+                          if (json.success && json.data && Array.isArray(json.data.systemUsers)) {
+                            const serverUsers = json.data.systemUsers;
+                            setSystemUsers(prev => {
+                              const map = new Map<string, SystemUser>();
+                              prev.forEach(u => map.set((u.username || u.id).toLowerCase(), u));
+                              serverUsers.forEach((u: SystemUser) => map.set((u.username || u.id).toLowerCase(), u));
+                              const combined = Array.from(map.values());
+                              localStorage.setItem('sysacad_system_users_v2', JSON.stringify(combined));
+                              return combined;
+                            });
+                            playSuccessSound();
+                            setManualSyncFeedback({
+                              type: 'success',
+                              message: `¡Servidor consultado! Se sincronizaron ${serverUsers.length} cuentas registradas.`
+                            });
+                            return;
+                          }
+                        }
+                        throw new Error('El servidor no devolvió usuarios adicionales.');
+                      } catch (err: any) {
+                        playErrorSound();
+                        setManualSyncFeedback({
+                          type: 'error',
+                          message: err.message || 'No se pudo conectar con el servidor central.'
+                        });
+                      } finally {
+                        setIsSyncingUsers(false);
+                      }
+                    }}
+                    disabled={isSyncingUsers}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+                  >
+                    <RefreshCw size={13} className={isSyncingUsers ? 'animate-spin text-blue-400' : ''} />
+                    <span>{isSyncingUsers ? 'Consultando...' : 'Descargar'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-950/80 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setIsManualSyncModalOpen(false);
+                  setManualSyncFeedback(null);
+                }}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        {!sessionUser ? (
+          <motion.div
           key="login-view"
           initial={{ opacity: 0, scale: 0.96, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -6456,6 +6739,21 @@ export default function App() {
                   >
                     <Lock size={16} />
                     <span>Iniciar Sesión</span>
+                  </button>
+                </div>
+
+                {/* Mobile Sync Helper Button on Login */}
+                <div className="pt-1 flex flex-col items-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playClickSound();
+                      setIsManualSyncModalOpen(true);
+                    }}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-slate-800/60 transition-all cursor-pointer"
+                  >
+                    <Smartphone size={14} className="text-blue-400 shrink-0" />
+                    <span>¿No ves a tus maestros en este celular? Sincronizar con PC</span>
                   </button>
                 </div>
 
@@ -7392,39 +7690,64 @@ export default function App() {
               <div className="flex flex-col items-center justify-center text-center p-5 bg-slate-50 border border-slate-200/80 rounded-2xl">
                 <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-200 mb-3">
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
-                      getPublicMobileUrl()
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(
+                      getMobileSyncUrl()
                     )}`}
                     alt="Código QR para celular"
-                    className="w-52 h-52 rounded-lg object-contain mx-auto"
+                    className="w-56 h-56 rounded-lg object-contain mx-auto"
                     referrerPolicy="no-referrer"
                   />
                 </div>
-                <p className="text-xs font-semibold text-slate-800 flex items-center justify-center gap-1.5">
+                <p className="text-xs font-bold text-slate-800 flex items-center justify-center gap-1.5">
                   <QrCode size={16} className="text-blue-600" />
                   Apunta la cámara de tu celular para abrir al instante
                 </p>
                 <p className="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">
-                  Enlace público sin restricción 403. Se abrirá en el navegador de tu teléfono con todos los usuarios sincronizados.
+                  El QR transfiere automáticamente los <strong>{systemUsers.length} usuarios registrados</strong> para que aparezcan en tu teléfono de inmediato.
                 </p>
               </div>
 
-              {/* Direct Link Section */}
+              {/* Bundled users preview */}
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-blue-900">
+                  <span className="flex items-center gap-1.5">
+                    <UserCircle size={16} className="text-blue-600" />
+                    Cuentas listas para tu teléfono ({systemUsers.length}):
+                  </span>
+                  <span className="text-[10px] bg-blue-200/70 text-blue-900 px-2 py-0.5 rounded-full font-semibold">
+                    100% Emparejados
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-0.5">
+                  {systemUsers.map((u) => (
+                    <span
+                      key={u.id || u.username}
+                      className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-xs font-mono text-blue-950 font-semibold shadow-2xs flex items-center gap-1"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      <span>{u.username}</span>
+                      <span className="text-[10px] text-slate-500 font-sans font-normal">({u.role})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Direct Link & Sync Code Section */}
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Enlace Público para Celular (Sin error 403)
+                    Enlace Completo de Sincronización para Celular
                   </label>
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
                       readOnly
-                      value={getPublicMobileUrl()}
+                      value={getMobileSyncUrl()}
                       className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 select-all"
                     />
                     <button
                       onClick={() => {
-                        const url = getPublicMobileUrl();
+                        const url = getMobileSyncUrl();
                         navigator.clipboard.writeText(url);
                         setCopiedCellUrl(true);
                         playClickSound();
@@ -7440,6 +7763,31 @@ export default function App() {
                       <span>{copiedCellUrl ? '¡Copiado!' : 'Copiar Enlace'}</span>
                     </button>
                   </div>
+                </div>
+
+                {/* Secondary Option: Copy Raw Sync Code */}
+                <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">¿Prefieres pegar un código corto?</p>
+                    <p className="text-[11px] text-slate-500">Copia el código y pégalo en la pantalla de inicio de tu celular.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const code = getSystemSyncCode();
+                      navigator.clipboard.writeText(code);
+                      setCopiedSyncCode(true);
+                      playClickSound();
+                      setTimeout(() => setCopiedSyncCode(false), 2500);
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                      copiedSyncCode
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-800 hover:bg-slate-900 text-white'
+                    }`}
+                  >
+                    {copiedSyncCode ? <Check size={14} /> : <KeyRound size={14} />}
+                    <span>{copiedSyncCode ? '¡Código Copiado!' : 'Copiar Código'}</span>
+                  </button>
                 </div>
 
                 {/* Optional Custom URL for Vercel */}
@@ -7517,5 +7865,6 @@ export default function App() {
         </motion.div>
       )}
     </AnimatePresence>
+    </div>
   );
 }

@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isValidStoreId(storeId) {
+      return storeId is string && storeId.size() > 0 && storeId.size() <= 64 && storeId.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    match /system_stores/{storeId} {
+      allow read, write: if isValidStoreId(storeId);
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "SystemStore": {
+      "title": "SystemStore",
+      "description": "Central synchronization document for academic system settings, users, catalog and records",
+      "type": "object",
+      "properties": {
+        "institutionName": {
+          "type": "string",
+          "description": "Name of the school institution"
+        },
+        "institutionLogo": {
+          "type": "string",
+          "description": "Logo URL or base64 of the school"
+        },
+        "adminEmail": {
+          "type": "string",
+          "description": "Administrator contact email"
+        },
+        "customClientId": {
+          "type": "string",
+          "description": "Google OAuth client ID override"
+        },
+        "systemUsers": {
+          "type": "array",
+          "description": "List of system users and credentials"
+        },
+        "alumnosList": {
+          "type": "array",
+          "description": "List of enrolled students"
+        },
+        "materiasList": {
+          "type": "array",
+          "description": "List of courses or subjects"
+        },
+        "calificacionesList": {
+          "type": "array",
+          "description": "List of student grades"
+        },
+        "avisosList": {
+          "type": "array",
+          "description": "List of school announcements"
+        },
+        "ciclosList": {
+          "type": "array",
+          "description": "List of school cycles"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of the last update"
+        }
+      },
+      "required": ["institutionName"]
+    }
+  },
+  "firestore": {
+    "/system_stores/{storeId}": {
+      "schema": "SystemStore",
+      "description": "Shared academic system state accessible by school client devices"
+    }
+  }
+}
