@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound, UploadCloud, Smartphone, QrCode, Share2, Copy, Check, LogIn, AlertCircle, Clock } from 'lucide-react';
+import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, CheckCircle, XCircle, Send, HelpCircle, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound, UploadCloud, Smartphone, QrCode, Share2, Copy, Check, LogIn, AlertCircle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive, searchDriveFiles } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId, validateGoogleToken, clearInvalidToken } from './auth';
@@ -371,6 +371,33 @@ export default function App() {
     parcial: string;
     calificacion: number;
     fecha: string;
+    modificacionesCount?: number;
+    solicitudPendiente?: {
+      id: string;
+      maestroNombre: string;
+      calificacionAnterior: number;
+      calificacionPropuesta: number;
+      motivo: string;
+      fechaSolicitud: string;
+      estado: 'pendiente' | 'aprobada' | 'rechazada';
+    };
+  }
+
+  interface SolicitudCambioCalif {
+    id: string;
+    calificacionId: string;
+    alumno: string;
+    materia: string;
+    parcial: string;
+    calificacionAnterior: number;
+    calificacionPropuesta: number;
+    motivo: string;
+    fechaSolicitud: string;
+    maestroNombre: string;
+    maestroUsername?: string;
+    estado: 'pendiente' | 'aprobada' | 'rechazada';
+    respuestaFecha?: string;
+    respuestaPor?: string;
   }
 
   interface AlumnoItem {
@@ -486,6 +513,30 @@ export default function App() {
     localStorage.setItem('sysacad_calificaciones_list', JSON.stringify(initialDefaultCalificaciones));
     return initialDefaultCalificaciones;
   });
+  // Solicitudes de Cambio de Calificación State
+  const [solicitudesCambioList, setSolicitudesCambioList] = useState<SolicitudCambioCalif[]>(() => {
+    const saved = localStorage.getItem('sysacad_solicitudes_cambio_list');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  const updateSolicitudesCambio = (newList: SolicitudCambioCalif[]) => {
+    setSolicitudesCambioList(newList);
+    localStorage.setItem('sysacad_solicitudes_cambio_list', JSON.stringify(newList));
+    syncSystemStoreToServer({ solicitudesCambioList: newList });
+  };
+
+  // State for Solicitud de Cambio Modal (Teacher side)
+  const [isSolicitudModalOpen, setIsSolicitudModalOpen] = useState(false);
+  const [solicitudCalifTarget, setSolicitudCalifTarget] = useState<CalificacionItem | null>(null);
+  const [solicitudNuevaVal, setSolicitudNuevaVal] = useState('9.0');
+  const [solicitudMotivo, setSolicitudMotivo] = useState('');
+
   const [califSearchQuery, setCalifSearchQuery] = useState('');
   const [isCalifModalOpen, setIsCalifModalOpen] = useState(false);
   const [califModalInitialTab, setCalifModalInitialTab] = useState<'manual' | 'rapida'>('manual');
@@ -521,6 +572,20 @@ export default function App() {
   };
 
   const handleOpenEditCalif = (item: CalificacionItem) => {
+    // Rule: Maestros/Docentes get 1 direct edit after upload (modificacionesCount === 0 or undefined).
+    // After 1 edit (modificacionesCount >= 1), pencil is locked and opens Solicitud de Cambio modal.
+    const isTeacher = sessionUser?.role === 'Maestros' || sessionUser?.role === 'Docente';
+    const editCount = item.modificacionesCount || 0;
+
+    if (isTeacher && editCount >= 1) {
+      playClickSound();
+      setSolicitudCalifTarget(item);
+      setSolicitudNuevaVal(item.calificacion.toString());
+      setSolicitudMotivo('');
+      setIsSolicitudModalOpen(true);
+      return;
+    }
+
     setEditingCalif(item);
     setCalifModalInitialTab('manual');
     setFormCalifAlumno(item.alumno);
@@ -528,6 +593,169 @@ export default function App() {
     setFormCalifParcial(item.parcial);
     setFormCalifVal(item.calificacion.toString());
     setIsCalifModalOpen(true);
+  };
+
+  const handleSendSolicitudCambio = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!solicitudCalifTarget) return;
+
+    if (!solicitudMotivo.trim()) {
+      playErrorSound();
+      alert('Por favor exponga detalladamente el motivo del cambio de calificación.');
+      return;
+    }
+
+    const nuevaVal = parseFloat(solicitudNuevaVal);
+    if (isNaN(nuevaVal) || nuevaVal < 0 || nuevaVal > 10) {
+      playErrorSound();
+      alert('La calificación propuesta debe ser un número entre 0 y 10.');
+      return;
+    }
+
+    const newSolicitud: SolicitudCambioCalif = {
+      id: Date.now().toString(),
+      calificacionId: solicitudCalifTarget.id,
+      alumno: solicitudCalifTarget.alumno,
+      materia: solicitudCalifTarget.materia,
+      parcial: solicitudCalifTarget.parcial,
+      calificacionAnterior: solicitudCalifTarget.calificacion,
+      calificacionPropuesta: nuevaVal,
+      motivo: solicitudMotivo.trim(),
+      fechaSolicitud: new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }),
+      maestroNombre: sessionUser?.nombreCompleto || sessionUser?.username || 'Maestro',
+      maestroUsername: sessionUser?.username,
+      estado: 'pendiente'
+    };
+
+    const updatedSolicitudes = [newSolicitud, ...solicitudesCambioList];
+    updateSolicitudesCambio(updatedSolicitudes);
+
+    // Attach pending request status to the grade item
+    const updatedCalifs = calificacionesList.map(c => c.id === solicitudCalifTarget.id ? {
+      ...c,
+      solicitudPendiente: {
+        id: newSolicitud.id,
+        maestroNombre: newSolicitud.maestroNombre,
+        calificacionAnterior: newSolicitud.calificacionAnterior,
+        calificacionPropuesta: newSolicitud.calificacionPropuesta,
+        motivo: newSolicitud.motivo,
+        fechaSolicitud: newSolicitud.fechaSolicitud,
+        estado: 'pendiente' as const
+      }
+    } : c);
+    updateCalificaciones(updatedCalifs);
+
+    // Create system notification for Control Escolar
+    const newAviso: AvisoItem = {
+      id: Date.now().toString(),
+      type: 'publico',
+      senderId: sessionUser?.username || 'maestro',
+      senderName: sessionUser?.nombreCompleto || 'Maestro',
+      targetName: 'Control Escolar',
+      message: `📩 SOLICITUD DE CAMBIO DE CALIFICACIÓN: El profesor ${sessionUser?.nombreCompleto || 'Maestro'} solicita modificar la calificación del alumno "${solicitudCalifTarget.alumno}" (${solicitudCalifTarget.materia} - ${solicitudCalifTarget.parcial}) de ${solicitudCalifTarget.calificacion.toFixed(1)} a ${nuevaVal.toFixed(1)}. Motivo: ${solicitudMotivo.trim()}`,
+      date: new Date().toLocaleDateString('es-MX'),
+      timestamp: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    };
+    updateAvisos([newAviso, ...avisosList]);
+
+    playSuccessSound();
+    setIsSolicitudModalOpen(false);
+    setSolicitudCalifTarget(null);
+    alert('¡Solicitud enviada a Control Escolar con éxito! Se ha notificado a Control Escolar para que apruebe o rechace el cambio.');
+  };
+
+  const handleAprobarSolicitud = (solicitudId: string) => {
+    const sol = solicitudesCambioList.find(s => s.id === solicitudId);
+    if (!sol) return;
+
+    // 1. Update grade item in calificacionesList with the proposed new grade
+    const updatedCalifs = calificacionesList.map(c => c.id === sol.calificacionId ? {
+      ...c,
+      calificacion: sol.calificacionPropuesta,
+      modificacionesCount: (c.modificacionesCount || 0) + 1,
+      solicitudPendiente: {
+        id: sol.id,
+        maestroNombre: sol.maestroNombre,
+        calificacionAnterior: sol.calificacionAnterior,
+        calificacionPropuesta: sol.calificacionPropuesta,
+        motivo: sol.motivo,
+        fechaSolicitud: sol.fechaSolicitud,
+        estado: 'aprobada' as const
+      }
+    } : c);
+    updateCalificaciones(updatedCalifs);
+
+    // 2. Mark request as approved
+    const updatedSolicitudes = solicitudesCambioList.map(s => s.id === solicitudId ? {
+      ...s,
+      estado: 'aprobada' as const,
+      respuestaFecha: new Date().toLocaleString('es-MX'),
+      respuestaPor: sessionUser?.nombreCompleto || sessionUser?.username || 'Control Escolar'
+    } : s);
+    updateSolicitudesCambio(updatedSolicitudes);
+
+    // 3. Send notification to the teacher
+    const newAviso: AvisoItem = {
+      id: Date.now().toString(),
+      type: 'personal',
+      senderId: sessionUser?.username || 'control_escolar',
+      senderName: sessionUser?.nombreCompleto || 'Control Escolar',
+      targetId: sol.maestroUsername,
+      targetName: sol.maestroNombre,
+      message: `✅ Control Escolar APROBÓ tu solicitud de cambio de calificación para el alumno "${sol.alumno}" (${sol.materia} - ${sol.parcial}). La calificación ha sido actualizada a ${sol.calificacionPropuesta.toFixed(1)}.`,
+      date: new Date().toLocaleDateString('es-MX'),
+      timestamp: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    };
+    updateAvisos([newAviso, ...avisosList]);
+
+    playSuccessSound();
+  };
+
+  const handleRechazarSolicitud = (solicitudId: string) => {
+    const sol = solicitudesCambioList.find(s => s.id === solicitudId);
+    if (!sol) return;
+
+    const motivoRechazo = prompt('Escribe el motivo del rechazo para informar al maestro (opcional):', 'Calificación registrada y validada previamente.');
+    
+    // 1. Mark request as rejected on grade item
+    const updatedCalifs = calificacionesList.map(c => c.id === sol.calificacionId ? {
+      ...c,
+      solicitudPendiente: {
+        id: sol.id,
+        maestroNombre: sol.maestroNombre,
+        calificacionAnterior: sol.calificacionAnterior,
+        calificacionPropuesta: sol.calificacionPropuesta,
+        motivo: sol.motivo,
+        fechaSolicitud: sol.fechaSolicitud,
+        estado: 'rechazada' as const
+      }
+    } : c);
+    updateCalificaciones(updatedCalifs);
+
+    // 2. Update status in solicitudesCambioList
+    const updatedSolicitudes = solicitudesCambioList.map(s => s.id === solicitudId ? {
+      ...s,
+      estado: 'rechazada' as const,
+      respuestaFecha: new Date().toLocaleString('es-MX'),
+      respuestaPor: sessionUser?.nombreCompleto || sessionUser?.username || 'Control Escolar'
+    } : s);
+    updateSolicitudesCambio(updatedSolicitudes);
+
+    // 3. Send notification to the teacher
+    const newAviso: AvisoItem = {
+      id: Date.now().toString(),
+      type: 'personal',
+      senderId: sessionUser?.username || 'control_escolar',
+      senderName: sessionUser?.nombreCompleto || 'Control Escolar',
+      targetId: sol.maestroUsername,
+      targetName: sol.maestroNombre,
+      message: `❌ Control Escolar RECHAZÓ tu solicitud de cambio de calificación para el alumno "${sol.alumno}" (${sol.materia} - ${sol.parcial}). Motivo: ${motivoRechazo || 'Sin especificación.'}`,
+      date: new Date().toLocaleDateString('es-MX'),
+      timestamp: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    };
+    updateAvisos([newAviso, ...avisosList]);
+
+    playSuccessSound();
   };
 
   const handleSaveManualCalif = (calif: {
@@ -565,12 +793,14 @@ export default function App() {
     }
 
     if (editingCalif) {
+      const currentCount = editingCalif.modificacionesCount || 0;
       updateCalificaciones(calificacionesList.map(c => c.id === editingCalif.id ? {
         ...c,
         alumno: trimmedAlumno,
         materia: trimmedMateria,
         parcial: trimmedParcial,
-        calificacion: calif.calificacion
+        calificacion: calif.calificacion,
+        modificacionesCount: currentCount + 1,
       } : c));
     } else {
       const newItem: CalificacionItem = {
@@ -579,7 +809,8 @@ export default function App() {
         materia: trimmedMateria,
         parcial: trimmedParcial,
         calificacion: calif.calificacion,
-        fecha: new Date().toISOString().split('T')[0]
+        fecha: new Date().toISOString().split('T')[0],
+        modificacionesCount: 0,
       };
       updateCalificaciones([newItem, ...calificacionesList]);
     }
@@ -592,7 +823,8 @@ export default function App() {
     const newItems: CalificacionItem[] = batch.map((item, idx) => ({
       ...item,
       id: `${Date.now()}_${idx}`,
-      fecha: today
+      fecha: today,
+      modificacionesCount: 0,
     }));
 
     updateCalificaciones([...newItems, ...calificacionesList]);
@@ -4723,9 +4955,13 @@ export default function App() {
           </div>
         );
       case 'calificaciones':
+        const solicitudesPendientes = solicitudesCambioList.filter(s => s.estado === 'pendiente');
+        const isControlEscolarOrAdmin = sessionUser?.role === 'Control Escolar' || sessionUser?.role === 'Administrador' || sessionUser?.role === 'Directivo';
+        const isTeacherUser = sessionUser?.role === 'Maestros' || sessionUser?.role === 'Docente';
+
         return (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-6xl mx-auto">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 mb-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-6xl mx-auto space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
                   <FileSpreadsheet size={24} />
@@ -4747,8 +4983,71 @@ export default function App() {
               </div>
             </div>
 
+            {/* Panel de Solicitudes de Cambio de Calificación Pendientes (Visibles a Control Escolar y Admin) */}
+            {isControlEscolarOrAdmin && solicitudesPendientes.length > 0 && (
+              <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-5 shadow-xs animate-in fade-in duration-200 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-amber-500 text-white rounded-xl shadow-xs">
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-amber-950 text-base">
+                      Solicitudes de Cambio de Calificación Pendientes ({solicitudesPendientes.length})
+                    </h3>
+                    <p className="text-xs text-amber-800">
+                      Los profesores han expuesto motivos para modificar calificaciones en las que alcanzaron el límite de edición. Revisa y decide si apruebas o rechazas.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  {solicitudesPendientes.map((sol) => (
+                    <div key={sol.id} className="bg-white rounded-xl p-4 border border-amber-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                          <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md font-bold">{sol.maestroNombre}</span>
+                          <span>•</span>
+                          <span>{sol.fechaSolicitud}</span>
+                        </div>
+                        <div className="text-sm font-bold text-slate-800">
+                          Alumno: {sol.alumno} <span className="font-normal text-slate-600">({sol.materia} - {sol.parcial})</span>
+                        </div>
+                        <div className="text-xs text-slate-700 flex items-center gap-2 pt-0.5">
+                          <span>Calificación registrada: <strong className="line-through text-slate-400">{sol.calificacionAnterior.toFixed(1)}</strong></span>
+                          <span>➔</span>
+                          <span>Propuesta: <strong className="text-emerald-700 text-sm font-bold">{sol.calificacionPropuesta.toFixed(1)}</strong></span>
+                        </div>
+                        <div className="text-xs text-slate-700 bg-amber-50/70 p-2.5 rounded-lg border border-amber-200 mt-1 italic">
+                          <strong>Motivo del cambio:</strong> "{sol.motivo}"
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => handleAprobarSolicitud(sol.id)}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle size={15} />
+                          <span>Aprobar y Cambiar</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRechazarSolicitud(sol.id)}
+                          className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <XCircle size={15} />
+                          <span>Rechazar</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Search and stats */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="relative w-full sm:w-80">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
@@ -4772,44 +5071,85 @@ export default function App() {
                     <th className="py-3 px-4">Materia</th>
                     <th className="py-3 px-4">Parcial / Período</th>
                     <th className="py-3 px-4">Calificación</th>
-                    <th className="py-3 px-4">Fecha Reg.</th>
-                    <th className="py-3 px-4 text-right">Acciones (Edición / Eliminar)</th>
+                    <th className="py-3 px-4">Estado / Edición</th>
+                    <th className="py-3 px-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {calificacionesList
                     .filter(c => c.alumno.toLowerCase().includes(califSearchQuery.toLowerCase()) || c.materia.toLowerCase().includes(califSearchQuery.toLowerCase()))
-                    .map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-medium text-slate-800">{item.alumno}</td>
-                      <td className="py-3 px-4 text-slate-600">{item.materia}</td>
-                      <td className="py-3 px-4 text-slate-600">{item.parcial}</td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${item.calificacion >= 9 ? 'bg-emerald-50 text-emerald-700' : item.calificacion >= 7 ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
-                          {item.calificacion.toFixed(1)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 text-xs">{item.fecha}</td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleOpenEditCalif(item)}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                            title="Edición"
-                          >
-                            <Edit3 size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCalif(item.id)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                            title="Eliminar"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                    .map((item) => {
+                      const editCount = item.modificacionesCount || 0;
+                      const isLockedForTeacher = isTeacherUser && editCount >= 1;
+                      const hasPendingReq = item.solicitudPendiente && item.solicitudPendiente.estado === 'pendiente';
+
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-4 font-medium text-slate-800">{item.alumno}</td>
+                          <td className="py-3 px-4 text-slate-600">{item.materia}</td>
+                          <td className="py-3 px-4 text-slate-600">{item.parcial}</td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${item.calificacion >= 9 ? 'bg-emerald-50 text-emerald-700' : item.calificacion >= 7 ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
+                              {item.calificacion.toFixed(1)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-xs">
+                            {hasPendingReq ? (
+                              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 font-semibold px-2.5 py-1 rounded-lg border border-amber-200">
+                                <Clock size={12} />
+                                <span>Solicitud enviada a Control Escolar</span>
+                              </span>
+                            ) : isLockedForTeacher ? (
+                              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 font-semibold px-2.5 py-1 rounded-lg border border-slate-200">
+                                <Lock size={12} className="text-amber-600" />
+                                <span>Edición Bloqueada (1 mod. realizada)</span>
+                              </span>
+                            ) : editCount === 1 ? (
+                              <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded-md">
+                                <span>1 Modificación realizada</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Sin modificaciones</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {isLockedForTeacher ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditCalif(item)}
+                                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                                  title="Límite alcanzado. Clic para exponer motivo y solicitar cambio a Control Escolar"
+                                >
+                                  <Lock size={14} className="text-amber-700" />
+                                  <span>Solicitar Cambio</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditCalif(item)}
+                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Edición de calificación"
+                                >
+                                  <Edit3 size={16} />
+                                </button>
+                              )}
+
+                              {isControlEscolarOrAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCalif(item.id)}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   {calificacionesList.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-slate-400 text-sm">
@@ -4820,6 +5160,91 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+
+            {/* Modal de Solicitud de Cambio de Calificación (Maestro -> Control Escolar) */}
+            {isSolicitudModalOpen && solicitudCalifTarget && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden">
+                  <div className="p-5 border-b border-slate-100 bg-amber-50/70 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl">
+                        <Lock size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-800 text-base">Solicitud de Cambio de Calificación</h3>
+                        <p className="text-xs text-amber-800 font-medium">Límite de edición directa alcanzado (1 modificación realizada)</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsSolicitudModalOpen(false)}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg text-sm transition-colors cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSendSolicitudCambio} className="p-6 space-y-4">
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-700">
+                      <p><strong>Alumno:</strong> {solicitudCalifTarget.alumno}</p>
+                      <p><strong>Materia:</strong> {solicitudCalifTarget.materia}</p>
+                      <p><strong>Período:</strong> {solicitudCalifTarget.parcial}</p>
+                      <p><strong>Calificación Actual:</strong> <span className="font-bold text-slate-900 text-sm">{solicitudCalifTarget.calificacion.toFixed(1)}</span></p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Nueva Calificación Propuesta (0 - 10)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="10"
+                        required
+                        value={solicitudNuevaVal}
+                        onChange={(e) => setSolicitudNuevaVal(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-bold text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Motivo o Exposición del Cambio <span className="text-rose-500">*</span>
+                      </label>
+                      <textarea
+                        required
+                        rows={4}
+                        placeholder="Explique el motivo por el cual solicita modificar la calificación (ej. revisión presencial de examen, corrección de captura, etc.)..."
+                        value={solicitudMotivo}
+                        onChange={(e) => setSolicitudMotivo(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800"
+                      />
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Esta solicitud llegará a Control Escolar en forma de aviso prioritario para su evaluación y aprobación.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsSolicitudModalOpen(false)}
+                        className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm cursor-pointer flex items-center gap-2"
+                      >
+                        <Send size={16} />
+                        <span>Enviar Motivo a Control Escolar</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
 
             {/* Modal para Captura Manual y Captura Rápida (Excel e Imagen IA) */}
             <CalificacionesModal

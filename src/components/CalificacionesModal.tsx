@@ -28,6 +28,16 @@ export interface CalificacionItem {
   parcial: string;
   calificacion: number;
   fecha: string;
+  modificacionesCount?: number;
+  solicitudPendiente?: {
+    id: string;
+    maestroNombre: string;
+    calificacionAnterior: number;
+    calificacionPropuesta: number;
+    motivo: string;
+    fechaSolicitud: string;
+    estado: 'pendiente' | 'aprobada' | 'rechazada';
+  };
 }
 
 export interface AlumnoItem {
@@ -137,6 +147,13 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Confirmation before final save
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    type: 'manual' | 'batch';
+    dataManual?: { alumno: string; materia: string; parcial: string; calificacion: number };
+    dataBatch?: Omit<CalificacionItem, 'id' | 'fecha'>[];
+  } | null>(null);
+
   useEffect(() => {
     if (isOpen) {
       if (editingCalif) {
@@ -167,7 +184,7 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Manual Submit
+  // Manual Submit (asks confirmation first)
   const handleSubmitManual = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formAlumno.trim() || !formMateria.trim()) {
@@ -181,11 +198,14 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
       return;
     }
 
-    onSaveManual({
-      alumno: formAlumno.trim(),
-      materia: formMateria.trim(),
-      parcial: formParcial,
-      calificacion: val,
+    setPendingConfirm({
+      type: 'manual',
+      dataManual: {
+        alumno: formAlumno.trim(),
+        materia: formMateria.trim(),
+        parcial: formParcial,
+        calificacion: val,
+      }
     });
   };
 
@@ -256,7 +276,7 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
     }
   };
 
-  // Import Valid Excel Records
+  // Import Valid Excel Records (asks confirmation first)
   const handleImportExcelData = () => {
     const validRows = excelPreviewData.filter(r => r.valido);
     if (validRows.length === 0) {
@@ -264,15 +284,15 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
       return;
     }
 
-    onSaveBatch(validRows.map(r => ({
-      alumno: r.alumno,
-      materia: r.materia,
-      parcial: r.parcial,
-      calificacion: r.calificacion
-    })));
-
-    setExcelSuccessCount(validRows.length);
-    playSuccessSound?.();
+    setPendingConfirm({
+      type: 'batch',
+      dataBatch: validRows.map(r => ({
+        alumno: r.alumno,
+        materia: r.materia,
+        parcial: r.parcial,
+        calificacion: r.calificacion
+      }))
+    });
   };
 
   // Handle Image Selection
@@ -415,7 +435,7 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
     }
   };
 
-  // Import Valid Image Records
+  // Import Valid Image Records (asks confirmation first)
   const handleImportImageData = () => {
     const validRows = imagePreviewData.filter(r => r.valido);
     if (validRows.length === 0) {
@@ -423,15 +443,15 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
       return;
     }
 
-    onSaveBatch(validRows.map(r => ({
-      alumno: r.alumno,
-      materia: r.materia,
-      parcial: r.parcial,
-      calificacion: r.calificacion
-    })));
-
-    setImageSuccessCount(validRows.length);
-    playSuccessSound?.();
+    setPendingConfirm({
+      type: 'batch',
+      dataBatch: validRows.map(r => ({
+        alumno: r.alumno,
+        materia: r.materia,
+        parcial: r.parcial,
+        calificacion: r.calificacion
+      }))
+    });
   };
 
   // Save custom Gemini API key to localStorage
@@ -1240,6 +1260,72 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
         </div>
 
       </div>
+
+      {/* Confirmation Modal overlay before submitting */}
+      {pendingConfirm && (
+        <div className="fixed inset-0 z-[70] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="p-3 bg-amber-100 rounded-xl">
+                <HelpCircle size={24} />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-800 text-base">Confirmación de Registro</h4>
+                <p className="text-xs text-slate-500">Verifica los datos antes de guardarlos en el sistema</p>
+              </div>
+            </div>
+
+            {pendingConfirm.type === 'manual' && pendingConfirm.dataManual && (
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5 text-slate-700">
+                <p><strong>Alumno:</strong> {pendingConfirm.dataManual.alumno}</p>
+                <p><strong>Materia:</strong> {pendingConfirm.dataManual.materia}</p>
+                <p><strong>Período:</strong> {pendingConfirm.dataManual.parcial}</p>
+                <p><strong>Calificación:</strong> <span className="font-bold text-blue-700 text-sm">{pendingConfirm.dataManual.calificacion.toFixed(1)}</span></p>
+              </div>
+            )}
+
+            {pendingConfirm.type === 'batch' && pendingConfirm.dataBatch && (
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-700">
+                <p className="font-semibold text-slate-800">Se registrarán <strong>{pendingConfirm.dataBatch.length}</strong> calificaciones en el sistema.</p>
+                <p className="text-[11px] text-slate-500">Podrás modificar cada calificación una vez más directamente en el sistema antes de que se bloquee.</p>
+              </div>
+            )}
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              ¿Confirmas que las calificaciones a subir están correctas o deseas modificarlas/revisarlas antes de guardarlas?
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPendingConfirm(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Revisar / Modificar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const conf = pendingConfirm;
+                  setPendingConfirm(null);
+                  if (conf.type === 'manual' && conf.dataManual) {
+                    onSaveManual(conf.dataManual);
+                  } else if (conf.type === 'batch' && conf.dataBatch) {
+                    onSaveBatch(conf.dataBatch);
+                    if (quickMode === 'excel') setExcelSuccessCount(conf.dataBatch.length);
+                    if (quickMode === 'imagen') setImageSuccessCount(conf.dataBatch.length);
+                    playSuccessSound?.();
+                  }
+                }}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+              >
+                <Check size={14} />
+                <span>Confirmar y Guardar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
