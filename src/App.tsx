@@ -4633,24 +4633,6 @@ export default function App() {
               <div className="flex flex-wrap items-center gap-2.5">
                 <button 
                   type="button"
-                  onClick={() => handleOpenQuickCapture('imagen')}
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 text-sm cursor-pointer"
-                  title="Escanear acta o lista física con IA y extraer calificaciones automáticamente"
-                >
-                  <Sparkles size={17} className="text-amber-300" />
-                  <span>Escanear con IA (Foto)</span>
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => handleOpenQuickCapture('excel')}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 text-sm cursor-pointer"
-                  title="Importar calificaciones masivas desde hoja de Excel"
-                >
-                  <FileSpreadsheet size={17} />
-                  <span>Subir Excel</span>
-                </button>
-                <button 
-                  type="button"
                   onClick={handleOpenCreateCalif}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
