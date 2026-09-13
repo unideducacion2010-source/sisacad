@@ -18,7 +18,7 @@ import { subscribeToFirebaseStore, saveToFirebaseStore, loadFromFirebaseStore } 
 export interface AppUser {
   username: string;
   email: string;
-  role: 'Administrador' | 'Control Escolar' | 'Maestros' | 'Secretaría' | 'Directivo' | 'Alumno';
+  role: 'Administrador' | 'Control Escolar' | 'Maestros' | 'Directivo' | 'Alumno';
 }
 
 export interface SystemUser {
@@ -27,7 +27,7 @@ export interface SystemUser {
   password?: string;
   name: string;
   email: string;
-  role: 'Administrador' | 'Control Escolar' | 'Maestros' | 'Secretaría' | 'Directivo' | 'Alumno';
+  role: 'Administrador' | 'Control Escolar' | 'Maestros' | 'Directivo' | 'Alumno';
   status: 'Activo' | 'Inactivo';
   fechaRegistro?: string;
   lastAccess: string;
@@ -47,7 +47,7 @@ export default function App() {
     if (saved) {
       try {
         const u = JSON.parse(saved);
-        if (u.role === 'Control Escolar' || u.role === 'Secretaría' || u.role === 'Directivo') return 'alumnos';
+        if (u.role === 'Control Escolar' || u.role === 'Directivo') return 'alumnos';
         if (u.role === 'Maestros') return 'calificaciones';
         if (u.role === 'Alumno') return 'kardex-alumnos';
       } catch (e) {}
@@ -158,9 +158,12 @@ export default function App() {
     if (parsed && Array.isArray(parsed) && parsed.length > 0) {
       parsed = parsed.map(u => {
         const isAdm = (u.username || '').toLowerCase() === 'admin' || (u.username || '').toLowerCase() === 'administrador' || u.role === 'Administrador';
+        let mappedRole = u.role as string;
+        if (mappedRole === 'Docente') mappedRole = 'Maestros';
+        if (mappedRole === 'Secretaría' || mappedRole === 'Secretaria') mappedRole = 'Control Escolar';
         return {
           ...u,
-          role: (u.role as string) === 'Docente' ? 'Maestros' as const : u.role,
+          role: mappedRole,
           lastAccess: isAdm ? (u.lastAccess || 'Reciente') : 'Nunca',
           mustChangePassword: isAdm ? false : true,
           firstLogin: isAdm ? false : true
@@ -1739,7 +1742,7 @@ export default function App() {
   const [formUserLogin, setFormUserLogin] = useState('');
   const [formUserPassword, setFormUserPassword] = useState('');
   const [formUserEmail, setFormUserEmail] = useState('');
-  const [formUserRole, setFormUserRole] = useState<'Administrador' | 'Control Escolar' | 'Maestros' | 'Docente' | 'Secretaría' | 'Directivo'>('Control Escolar');
+  const [formUserRole, setFormUserRole] = useState<'Administrador' | 'Control Escolar' | 'Maestros' | 'Docente' | 'Directivo'>('Control Escolar');
   const [formUserStatus, setFormUserStatus] = useState<'Activo' | 'Inactivo'>('Activo');
   const [isSyncingUsers, setIsSyncingUsers] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
@@ -2241,10 +2244,15 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && (parsed.username?.toLowerCase() === 'admin' || parsed.username?.toLowerCase() === 'administrador')) {
-          return { ...parsed, role: 'Administrador' };
+        if (parsed) {
+          if (parsed.role === 'Secretaría' || parsed.role === 'Secretaria') {
+            parsed.role = 'Control Escolar';
+          }
+          if (parsed.username?.toLowerCase() === 'admin' || parsed.username?.toLowerCase() === 'administrador') {
+            return { ...parsed, role: 'Administrador' };
+          }
+          return parsed;
         }
-        return parsed;
       } catch (e) {
         return null;
       }
@@ -2570,7 +2578,7 @@ export default function App() {
       setIsControlEscolarSubOpen(true);
       setIsMaestrosSubOpen(true);
       setCurrentView('alumnos');
-    } else if (foundUser.role === 'Control Escolar' || foundUser.role === 'Secretaría') {
+    } else if (foundUser.role === 'Control Escolar') {
       setIsControlEscolarSubOpen(true);
       setCurrentView('alumnos');
     } else if (foundUser.role === 'Maestros' || foundUser.role === 'Docente') {
@@ -2673,7 +2681,7 @@ export default function App() {
       setIsControlEscolarSubOpen(true);
       setIsMaestrosSubOpen(true);
       setCurrentView('alumnos');
-    } else if (loggedInUser.role === 'Control Escolar' || loggedInUser.role === 'Secretaría') {
+    } else if (loggedInUser.role === 'Control Escolar') {
       setIsControlEscolarSubOpen(true);
       setCurrentView('alumnos');
     } else if (loggedInUser.role === 'Maestros') {
@@ -2869,7 +2877,7 @@ export default function App() {
     if (role === 'Directivo') {
       return menuId === 'control-escolar' || menuId === 'maestros';
     }
-    if (role === 'Control Escolar' || role === 'Secretaría') {
+    if (role === 'Control Escolar') {
       return menuId === 'control-escolar';
     }
     if (role === 'Maestros' || role === 'Docente') {
@@ -2889,7 +2897,7 @@ export default function App() {
       if (sessionUser.role === 'Directivo' && !allowedDirectivoViews.includes(currentView)) {
         setCurrentView('alumnos');
         setIsControlEscolarSubOpen(true);
-      } else if ((sessionUser.role === 'Control Escolar' || sessionUser.role === 'Secretaría') && !allowedControlViews.includes(currentView)) {
+      } else if (sessionUser.role === 'Control Escolar' && !allowedControlViews.includes(currentView)) {
         setCurrentView('alumnos');
         setIsControlEscolarSubOpen(true);
       } else if ((sessionUser.role === 'Maestros' || sessionUser.role === 'Docente') && !['calificaciones', 'avisos'].includes(currentView)) {
@@ -5988,7 +5996,6 @@ export default function App() {
                         <option value="administrador">Administrador</option>
                         <option value="control escolar">Control Escolar</option>
                         <option value="maestros">Maestros</option>
-                        <option value="secretaría">Secretaría</option>
                         <option value="directivo">Directivo</option>
                       </select>
                     </div>
@@ -6042,7 +6049,6 @@ export default function App() {
                                     u.role === 'Administrador' ? 'bg-purple-100 text-purple-800' :
                                     u.role === 'Control Escolar' ? 'bg-blue-100 text-blue-800' :
                                     u.role === 'Directivo' ? 'bg-indigo-100 text-indigo-800' :
-                                    u.role === 'Secretaría' ? 'bg-amber-100 text-amber-800' :
                                     'bg-teal-100 text-teal-800'
                                   }`}>
                                     {u.role}
@@ -6185,11 +6191,10 @@ export default function App() {
                               <option value="Administrador">Administrador (Acceso Total)</option>
                               <option value="Directivo">Directivo (Control Escolar y Maestros)</option>
                               <option value="Control Escolar">Control Escolar (Solo Control Escolar)</option>
-                              <option value="Secretaría">Secretaría (Solo Control Escolar)</option>
                               <option value="Maestros">Maestros (Portal Docente)</option>
                             </select>
                             <p className="text-[11px] text-slate-500 mt-1">
-                              Directivo: control de Control Escolar y Maestros (Administrador y Kardex Alumnos apagados). Control Escolar / Secretaría: solo Control Escolar. Maestros: solo Maestros.
+                              Directivo: control de Control Escolar y Maestros (Administrador y Kardex Alumnos apagados). Control Escolar: solo Control Escolar. Maestros: solo Maestros.
                             </p>
                           </div>
 
