@@ -2528,10 +2528,14 @@ export default function App() {
     }
 
     // CHECK IF FIRST TIME LOGIN OR PASSWORD CHANGE REQUIRED
+    const isNonAdmin = foundUser.username.toLowerCase() !== 'admin' && foundUser.username.toLowerCase() !== 'control' && foundUser.username.toLowerCase() !== 'maestro';
     const requiresPasswordChange = Boolean(
-      foundUser.mustChangePassword || 
-      foundUser.firstLogin || 
-      (foundUser.lastAccess === 'Nunca' && foundUser.username.toLowerCase() !== 'admin')
+      isNonAdmin && (
+        foundUser.mustChangePassword === true || 
+        foundUser.mustChangePassword === undefined || 
+        foundUser.firstLogin === true || 
+        foundUser.lastAccess === 'Nunca'
+      )
     );
 
     if (requiresPasswordChange) {
