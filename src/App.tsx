@@ -6785,21 +6785,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Mobile Sync Helper Button on Login */}
-                <div className="pt-1 flex flex-col items-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playClickSound();
-                      setIsManualSyncModalOpen(true);
-                    }}
-                    className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-slate-800/60 transition-all cursor-pointer"
-                  >
-                    <Smartphone size={14} className="text-blue-400 shrink-0" />
-                    <span>¿No ves a tus maestros en este celular? Sincronizar con PC</span>
-                  </button>
-                </div>
-
                 {/* Informative Notice regarding enrollment */}
                 <div className="pt-3 border-t border-slate-800/60 text-center text-xs text-slate-400">
                   <span className="leading-relaxed block">
