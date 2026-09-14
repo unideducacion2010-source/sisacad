@@ -108,7 +108,7 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
     editingCalif ? editingCalif.materia : (materiasList[0] ? materiasList[0].nombre : '')
   );
   const [formParcial, setFormParcial] = useState(
-    editingCalif ? editingCalif.parcial : 'Primer Parcial'
+    editingCalif ? editingCalif.parcial : '1er Trimestre'
   );
   const [formCalificacion, setFormCalificacion] = useState(
     editingCalif ? editingCalif.calificacion.toString() : '9.0'
@@ -135,7 +135,7 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [imageSuccessCount, setImageSuccessCount] = useState<number | null>(null);
-  const [imageDefaultParcial, setImageDefaultParcial] = useState('Primer Parcial');
+  const [imageDefaultParcial, setImageDefaultParcial] = useState('1er Trimestre');
   const [imageDefaultMateria, setImageDefaultMateria] = useState('');
   const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('sysacad_gemini_api_key') || '');
   const [showApiKeySettings, setShowApiKeySettings] = useState(false);
@@ -612,6 +612,9 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
                     onChange={(e) => setFormParcial(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
+                    <option value="1er Trimestre">1er Trimestre</option>
+                    <option value="2do Trimestre">2do Trimestre</option>
+                    <option value="3er Trimestre">3er Trimestre</option>
                     <option value="Primer Parcial">Primer Parcial</option>
                     <option value="Segundo Parcial">Segundo Parcial</option>
                     <option value="Tercer Parcial">Tercer Parcial</option>
@@ -934,6 +937,9 @@ export const CalificacionesModal: React.FC<CalificacionesModalProps> = ({
                         onChange={(e) => setImageDefaultParcial(e.target.value)}
                         className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-purple-500"
                       >
+                        <option value="1er Trimestre">1er Trimestre</option>
+                        <option value="2do Trimestre">2do Trimestre</option>
+                        <option value="3er Trimestre">3er Trimestre</option>
                         <option value="Primer Parcial">Primer Parcial</option>
                         <option value="Segundo Parcial">Segundo Parcial</option>
                         <option value="Tercer Parcial">Tercer Parcial</option>

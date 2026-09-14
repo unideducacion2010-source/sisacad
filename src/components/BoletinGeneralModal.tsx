@@ -390,14 +390,23 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
         return cMat.includes(sMat.slice(0, 5)) || sMat.includes(cMat.slice(0, 5));
       });
 
-      // Map partials or bimestres
-      const p1 = matches.find(m => m.parcial.includes('1') || m.parcial.toLowerCase().includes('sep'))?.calificacion;
-      const p2 = matches.find(m => m.parcial.includes('2') || m.parcial.toLowerCase().includes('nov'))?.calificacion;
-      const p3 = matches.find(m => m.parcial.includes('3') || m.parcial.toLowerCase().includes('ene'))?.calificacion;
-      const p4 = matches.find(m => m.parcial.includes('4') || m.parcial.toLowerCase().includes('mar'))?.calificacion;
-      const p5 = matches.find(m => m.parcial.includes('5') || m.parcial.toLowerCase().includes('may'))?.calificacion;
+      // Map partials/trimestres to 3 Trimestres
+      const t1 = matches.find(m => {
+        const p = m.parcial.toLowerCase();
+        return p.includes('1') || p.includes('1er') || p.includes('tri 1') || p.includes('trimestre 1') || p.includes('sep') || p.includes('oct') || p.includes('nov');
+      })?.calificacion;
+
+      const t2 = matches.find(m => {
+        const p = m.parcial.toLowerCase();
+        return p.includes('2') || p.includes('2do') || p.includes('tri 2') || p.includes('trimestre 2') || p.includes('dic') || p.includes('ene') || p.includes('feb') || p.includes('mar');
+      })?.calificacion;
+
+      const t3 = matches.find(m => {
+        const p = m.parcial.toLowerCase();
+        return p.includes('3') || p.includes('3er') || p.includes('tri 3') || p.includes('trimestre 3') || p.includes('abr') || p.includes('may') || p.includes('jun') || p.includes('jul');
+      })?.calificacion;
       
-      const registered = [p1, p2, p3, p4, p5].filter(v => v !== undefined && v !== null) as number[];
+      const registered = [t1, t2, t3].filter(v => v !== undefined && v !== null) as number[];
       let finalAvg: string | number = '';
       if (registered.length > 0) {
         finalAvg = (registered.reduce((a, b) => a + Number(b), 0) / registered.length).toFixed(1);
@@ -405,20 +414,26 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
         finalAvg = Number(matches[0].calificacion).toFixed(1);
       }
 
+      const formattedT1 = t1 !== undefined ? Number(t1).toFixed(1) : '';
+      const formattedT2 = t2 !== undefined ? Number(t2).toFixed(1) : '';
+      const formattedT3 = t3 !== undefined ? Number(t3).toFixed(1) : '';
+
       return {
         materia: subj,
-        b1: p1 !== undefined ? Number(p1).toFixed(1) : '',
-        b2: p2 !== undefined ? Number(p2).toFixed(1) : '',
-        b3: p3 !== undefined ? Number(p3).toFixed(1) : '',
-        b4: p4 !== undefined ? Number(p4).toFixed(1) : '',
-        b5: p5 !== undefined ? Number(p5).toFixed(1) : '',
+        t1: formattedT1,
+        t2: formattedT2,
+        t3: formattedT3,
+        // Keep b1, b2, b3 aliases for backwards compatibility
+        b1: formattedT1,
+        b2: formattedT2,
+        b3: formattedT3,
+        b4: '',
+        b5: '',
         final: finalAvg,
         inasistencias: {
-          b1: '',
-          b2: '',
-          b3: '',
-          b4: '',
-          b5: '',
+          t1: '',
+          t2: '',
+          t3: '',
           total: ''
         },
         regularizacion: {
@@ -1298,10 +1313,10 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                                 <th rowSpan={2} className="border border-black px-2 py-1 text-left uppercase w-52 font-bold">
                                   PERIODO ESCOLAR {cicloTextClean.replace('CICLO ESCOLAR', '')} / ASIGNATURAS
                                 </th>
-                                <th colSpan={6} className="border border-black px-1 py-0.5 uppercase font-bold">
-                                  CALIFICACIONES
+                                <th colSpan={4} className="border border-black px-1 py-0.5 uppercase font-bold">
+                                  CALIFICACIONES (TRIMESTRES)
                                 </th>
-                                <th colSpan={6} className="border border-black px-1 py-0.5 uppercase font-bold">
+                                <th colSpan={4} className="border border-black px-1 py-0.5 uppercase font-bold">
                                   INASISTENCIAS
                                 </th>
                                 <th colSpan={3} className="border border-black px-1 py-0.5 uppercase font-bold">
@@ -1309,17 +1324,22 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                                 </th>
                               </tr>
                               <tr className="border-b border-black text-[7.5px] font-bold">
-                                <th className="border border-black px-1 py-1 w-9">SEP OCT</th>
-                                <th className="border border-black px-1 py-1 w-9">NOV DIC</th>
-                                <th className="border border-black px-1 py-1 w-9">ENE FEB</th>
-                                <th className="border border-black px-1 py-1 w-9">MAR ABR</th>
-                                <th className="border border-black px-1 py-1 w-9">MAY JUN</th>
+                                <th className="border border-black px-1 py-1 w-16">
+                                  1er TRIMESTRE
+                                  <span className="block text-[6.5px] font-normal text-slate-600 uppercase">SEP - NOV</span>
+                                </th>
+                                <th className="border border-black px-1 py-1 w-16">
+                                  2do TRIMESTRE
+                                  <span className="block text-[6.5px] font-normal text-slate-600 uppercase">DIC - MAR</span>
+                                </th>
+                                <th className="border border-black px-1 py-1 w-16">
+                                  3er TRIMESTRE
+                                  <span className="block text-[6.5px] font-normal text-slate-600 uppercase">ABR - JUN</span>
+                                </th>
                                 <th className="border border-black px-1 py-1 w-12 bg-slate-200">FINAL</th>
-                                <th className="border border-black px-0.5 py-1 w-6">1</th>
-                                <th className="border border-black px-0.5 py-1 w-6">2</th>
-                                <th className="border border-black px-0.5 py-1 w-6">3</th>
-                                <th className="border border-black px-0.5 py-1 w-6">4</th>
-                                <th className="border border-black px-0.5 py-1 w-6">5</th>
+                                <th className="border border-black px-0.5 py-1 w-7">1TR<span className="block text-[6px] font-normal text-slate-500">SEP-NOV</span></th>
+                                <th className="border border-black px-0.5 py-1 w-7">2TR<span className="block text-[6px] font-normal text-slate-500">DIC-MAR</span></th>
+                                <th className="border border-black px-0.5 py-1 w-7">3TR<span className="block text-[6px] font-normal text-slate-500">ABR-JUN</span></th>
                                 <th className="border border-black px-0.5 py-1 w-7 bg-slate-200">TOT</th>
                                 <th className="border border-black px-1 py-1 w-14">TIPO</th>
                                 <th className="border border-black px-1 py-1 w-12">FECHA</th>
@@ -1332,14 +1352,10 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                                   <td className="border border-black px-2 py-0.5 text-left font-bold uppercase whitespace-nowrap">
                                     {row.materia}
                                   </td>
-                                  <td className="border border-black px-1 py-0.5 font-mono">{row.b1 || '—'}</td>
-                                  <td className="border border-black px-1 py-0.5 font-mono">{row.b2 || '—'}</td>
-                                  <td className="border border-black px-1 py-0.5 font-mono">{row.b3 || '—'}</td>
-                                  <td className="border border-black px-1 py-0.5 font-mono">{row.b4 || '—'}</td>
-                                  <td className="border border-black px-1 py-0.5 font-mono">{row.b5 || '—'}</td>
+                                  <td className="border border-black px-1 py-0.5 font-mono">{row.t1 || row.b1 || '—'}</td>
+                                  <td className="border border-black px-1 py-0.5 font-mono">{row.t2 || row.b2 || '—'}</td>
+                                  <td className="border border-black px-1 py-0.5 font-mono">{row.t3 || row.b3 || '—'}</td>
                                   <td className="border border-black px-1 py-0.5 font-mono font-bold bg-slate-100">{row.final || '—'}</td>
-                                  <td className="border border-black px-0.5 py-0.5">0</td>
-                                  <td className="border border-black px-0.5 py-0.5">0</td>
                                   <td className="border border-black px-0.5 py-0.5">0</td>
                                   <td className="border border-black px-0.5 py-0.5">0</td>
                                   <td className="border border-black px-0.5 py-0.5">0</td>
@@ -2107,10 +2123,10 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                         <th rowSpan={2} className="border border-black px-2 py-1 text-left uppercase w-52 font-bold text-black">
                           PERIODO ESCOLAR {cicloTextClean.replace('CICLO ESCOLAR', '')} <br /> ASIGNATURAS
                         </th>
-                        <th colSpan={6} className="border border-black px-1 py-0.5 uppercase font-bold text-black">
-                          CALIFICACIONES
+                        <th colSpan={4} className="border border-black px-1 py-0.5 uppercase font-bold text-black">
+                          TRIMESTRES DE EVALUACIÓN
                         </th>
-                        <th colSpan={6} className="border border-black px-1 py-0.5 uppercase font-bold text-black">
+                        <th colSpan={4} className="border border-black px-1 py-0.5 uppercase font-bold text-black">
                           INASISTENCIAS
                         </th>
                         <th colSpan={3} className="border border-black px-1 py-0.5 uppercase font-bold text-black">
@@ -2118,17 +2134,22 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                         </th>
                       </tr>
                       <tr className="border-b border-black text-[7px] font-bold text-black">
-                        <th className="border border-black px-0.5 py-1 w-9">SEPTIEMBRE<br/>OCTUBRE</th>
-                        <th className="border border-black px-0.5 py-1 w-9">NOVIEMBRE<br/>DICIEMBRE</th>
-                        <th className="border border-black px-0.5 py-1 w-9">ENERO<br/>FEBRERO</th>
-                        <th className="border border-black px-0.5 py-1 w-9">MARZO<br/>ABRIL</th>
-                        <th className="border border-black px-0.5 py-1 w-9">MAYO<br/>JUNIO/JULIO</th>
+                        <th className="border border-black px-0.5 py-1 w-14">
+                          1ER TRIMESTRE
+                          <span className="block text-[6px] font-normal leading-tight">SEP - NOV</span>
+                        </th>
+                        <th className="border border-black px-0.5 py-1 w-14">
+                          2DO TRIMESTRE
+                          <span className="block text-[6px] font-normal leading-tight">DIC - MAR</span>
+                        </th>
+                        <th className="border border-black px-0.5 py-1 w-14">
+                          3ER TRIMESTRE
+                          <span className="block text-[6px] font-normal leading-tight">ABR - JUN</span>
+                        </th>
                         <th className="border border-black px-0.5 py-1 w-11 bg-slate-100">CALIFICACION<br/>FINAL</th>
-                        <th className="border border-black px-0.5 py-1 w-5">SEP<br/>OCT</th>
-                        <th className="border border-black px-0.5 py-1 w-5">NOV<br/>DIC</th>
-                        <th className="border border-black px-0.5 py-1 w-5">ENE<br/>FEB</th>
-                        <th className="border border-black px-0.5 py-1 w-5">MAR<br/>ABR</th>
-                        <th className="border border-black px-0.5 py-1 w-5">MAY<br/>JUN</th>
+                        <th className="border border-black px-0.5 py-1 w-6">1ER TRIM<br/><span className="text-[5.5px] font-normal">(SEP-NOV)</span></th>
+                        <th className="border border-black px-0.5 py-1 w-6">2DO TRIM<br/><span className="text-[5.5px] font-normal">(DIC-MAR)</span></th>
+                        <th className="border border-black px-0.5 py-1 w-6">3ER TRIM<br/><span className="text-[5.5px] font-normal">(ABR-JUN)</span></th>
                         <th className="border border-black px-0.5 py-1 w-6 bg-slate-100">TOTAL</th>
                         <th className="border border-black px-1 py-1 w-12">TIPO DE<br/>EXAMEN</th>
                         <th className="border border-black px-1 py-1 w-10">FECHA</th>
@@ -2141,14 +2162,10 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                           <td className="border border-black px-2 py-0.5 text-left font-bold uppercase whitespace-nowrap text-black">
                             {row.materia}
                           </td>
-                          <td className="border border-black px-0.5 py-0.5 font-mono text-black">{row.b1}</td>
-                          <td className="border border-black px-0.5 py-0.5 font-mono text-black">{row.b2}</td>
-                          <td className="border border-black px-0.5 py-0.5 font-mono text-black">{row.b3}</td>
-                          <td className="border border-black px-0.5 py-0.5 font-mono text-black">{row.b4}</td>
-                          <td className="border border-black px-0.5 py-0.5 font-mono text-black">{row.b5}</td>
+                          <td className="border border-black px-0.5 py-0.5 font-mono text-black">{row.t1 || row.b1}</td>
+                          <td className="border border-black px-0.5 py-0.5 font-mono text-black">{row.t2 || row.b2}</td>
+                          <td className="border border-black px-0.5 py-0.5 font-mono text-black">{row.t3 || row.b3}</td>
                           <td className="border border-black px-0.5 py-0.5 font-mono font-bold bg-slate-100 text-black">{row.final}</td>
-                          <td className="border border-black px-0.5 py-0.5"></td>
-                          <td className="border border-black px-0.5 py-0.5"></td>
                           <td className="border border-black px-0.5 py-0.5"></td>
                           <td className="border border-black px-0.5 py-0.5"></td>
                           <td className="border border-black px-0.5 py-0.5"></td>
