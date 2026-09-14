@@ -462,6 +462,7 @@ export default function App() {
     profesor: string;
     creditos: number;
     area?: string;
+    grado?: string;
     estatus?: string;
   }
 
@@ -1168,6 +1169,30 @@ export default function App() {
   const [formProfesor, setFormProfesor] = useState('');
   const [formCreditos, setFormCreditos] = useState('6');
   const [formAreaMateria, setFormAreaMateria] = useState('Ciencias Exactas');
+  const [formGradoMateria, setFormGradoMateria] = useState('Todos');
+
+  const normalizeGradoNumber = (gradoStr?: string): string => {
+    if (!gradoStr) return '';
+    const str = gradoStr.toString().toLowerCase().trim();
+    if (str.includes('1') || str.includes('primer') || str.includes('1er') || str.includes('1ro')) return '1';
+    if (str.includes('2') || str.includes('segundo') || str.includes('2do') || str.includes('2da')) return '2';
+    if (str.includes('3') || str.includes('tercer') || str.includes('3ro') || str.includes('3ra') || str.includes('3er')) return '3';
+    if (str.includes('4') || str.includes('cuarto') || str.includes('4to') || str.includes('4ta')) return '4';
+    if (str.includes('5') || str.includes('quinto') || str.includes('5to') || str.includes('5ta')) return '5';
+    if (str.includes('6') || str.includes('sexto') || str.includes('6to') || str.includes('6ta')) return '6';
+    return str;
+  };
+
+  const matchesMateriaGrado = (materiaGrado?: string, alumnoGrado?: string): boolean => {
+    if (!materiaGrado || materiaGrado === 'Todos' || materiaGrado === 'Todos los grados') return true;
+    if (!alumnoGrado) return true;
+    const numMat = normalizeGradoNumber(materiaGrado);
+    const numAlum = normalizeGradoNumber(alumnoGrado);
+    if (numMat && numAlum) {
+      return numMat === numAlum;
+    }
+    return materiaGrado.toLowerCase().trim() === alumnoGrado.toLowerCase().trim();
+  };
 
   const handleOpenCreateMateria = () => {
     setEditingMateria(null);
@@ -1176,6 +1201,7 @@ export default function App() {
     setFormProfesor('');
     setFormCreditos('6');
     setFormAreaMateria('Ciencias Exactas');
+    setFormGradoMateria('Todos');
     setIsMateriaModalOpen(true);
   };
 
@@ -1186,6 +1212,7 @@ export default function App() {
     setFormProfesor(item.profesor);
     setFormCreditos(item.creditos.toString());
     setFormAreaMateria(item.area || 'Ciencias Exactas');
+    setFormGradoMateria(item.grado || 'Todos');
     setIsMateriaModalOpen(true);
   };
 
@@ -1224,6 +1251,7 @@ export default function App() {
         profesor: formProfesor,
         creditos: credNum,
         area: formAreaMateria,
+        grado: formGradoMateria,
         estatus: 'Activa'
       } : m));
     } else {
@@ -1234,6 +1262,7 @@ export default function App() {
         profesor: formProfesor,
         creditos: credNum,
         area: formAreaMateria,
+        grado: formGradoMateria,
         estatus: 'Activa'
       };
       updateMaterias([newItem, ...materiasList]);
@@ -1248,13 +1277,14 @@ export default function App() {
   };
 
   const exportMateriasToCSV = () => {
-    const headers = ['Clave / ID', 'Nombre de Materia', 'Profesor Asignado', 'Créditos Académicos', 'Área / Nivel', 'Estatus'];
+    const headers = ['Clave / ID', 'Nombre de Materia', 'Grado Escolar', 'Profesor Asignado', 'Créditos Académicos', 'Área / Nivel', 'Estatus'];
     const csvRows = [headers.join(',')];
     
     materiasList.forEach(materia => {
       const row = [
         `"${materia.clave || `MAT-${materia.id.slice(-4)}`}"`,
         `"${materia.nombre.replace(/"/g, '""')}"`,
+        `"${(materia.grado || 'Todos los grados').replace(/"/g, '""')}"`,
         `"${(materia.profesor || 'Sin asignar').replace(/"/g, '""')}"`,
         `"${materia.creditos}"`,
         `"${(materia.area || 'Tronco Común').replace(/"/g, '""')}"`,
@@ -4611,17 +4641,27 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {materiasList.map((m) => {
-                          const { p1, p2, p3, ef, finalAverage } = getGradesForMateria(m.nombre);
+                        {(() => {
+                          const currentStudentObj = alumnosList.find(a => 
+                            `${a.nombres} ${a.apellidos}`.toLowerCase() === selectedAlumnoName.toLowerCase() ||
+                            `${a.apellidos} ${a.nombres}`.toLowerCase() === selectedAlumnoName.toLowerCase() ||
+                            a.nombres.toLowerCase() === selectedAlumnoName.toLowerCase()
+                          );
+                          const studentGrado = currentStudentObj?.grado || kardexGrado;
+                          const filteredMateriasForStudent = materiasList.filter(m => matchesMateriaGrado(m.grado, studentGrado));
+                          const materiasToDisplay = filteredMateriasForStudent.length > 0 ? filteredMateriasForStudent : materiasList;
 
-                          return (
-                            <tr key={m.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="py-4 px-4 font-semibold text-slate-700">
-                                {selectedAlumnoName}
-                              </td>
-                              <td className="py-4 px-4 font-semibold text-slate-800">
-                                {m.nombre}
-                              </td>
+                          return materiasToDisplay.map((m) => {
+                            const { p1, p2, p3, ef, finalAverage } = getGradesForMateria(m.nombre);
+
+                            return (
+                              <tr key={m.id} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="py-4 px-4 font-semibold text-slate-700">
+                                  {selectedAlumnoName}
+                                </td>
+                                <td className="py-4 px-4 font-semibold text-slate-800">
+                                  {m.nombre}
+                                </td>
                               <td className="py-4 px-4">
                                 <div className="flex flex-wrap gap-2">
                                   <span className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-100 text-slate-800 text-xs font-medium">
@@ -4655,8 +4695,9 @@ export default function App() {
                               </td>
                             </tr>
                           );
-                        })}
-                        {materiasList.length === 0 && (
+                        });
+                      })()}
+                      {materiasList.length === 0 && (
                           <tr>
                             <td colSpan={4} className="py-8 text-center text-slate-400 text-xs font-medium">
                               No hay materias registradas en el plan de estudios.
@@ -4758,6 +4799,7 @@ export default function App() {
                   <tr className="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
                     <th className="py-3 px-4">Clave</th>
                     <th className="py-3 px-4">Materia / Asignatura</th>
+                    <th className="py-3 px-4">Grado Escolar</th>
                     <th className="py-3 px-4">Profesor Asignado</th>
                     <th className="py-3 px-4">Créditos</th>
                     <th className="py-3 px-4">Área / Nivel</th>
@@ -4767,7 +4809,7 @@ export default function App() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {materiasList
-                    .filter(m => `${m.nombre} ${m.profesor} ${m.clave || ''} ${m.area || ''}`.toLowerCase().includes(materiaSearchQuery.toLowerCase()))
+                    .filter(m => `${m.nombre} ${m.profesor} ${m.clave || ''} ${m.area || ''} ${m.grado || ''}`.toLowerCase().includes(materiaSearchQuery.toLowerCase()))
                     .map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4">
@@ -4785,6 +4827,15 @@ export default function App() {
                             <div className="text-[11px] text-slate-400">{item.area || 'Tronco Común'}</div>
                           </div>
                         </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${
+                          item.grado && item.grado !== 'Todos'
+                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}>
+                          {item.grado || 'Todos los grados'}
+                        </span>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
@@ -4829,7 +4880,7 @@ export default function App() {
                   ))}
                   {materiasList.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                      <td colSpan={8} className="py-8 text-center text-slate-400 text-xs">
                         No hay materias registradas en el plan de estudios.
                       </td>
                     </tr>
@@ -4899,6 +4950,25 @@ export default function App() {
                         onChange={(e) => setFormNombreMateria(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Grado Escolar
+                      </label>
+                      <select
+                        value={formGradoMateria}
+                        onChange={(e) => setFormGradoMateria(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-800"
+                      >
+                        <option value="Todos">Todos los grados</option>
+                        <option value="1ero">1ero (Primer Grado)</option>
+                        <option value="2do">2do (Segundo Grado)</option>
+                        <option value="3ro">3ro (Tercer Grado)</option>
+                        <option value="4to">4to (Cuarto Grado)</option>
+                        <option value="5to">5to (Quinto Grado)</option>
+                        <option value="6to">6to (Sexto Grado)</option>
+                      </select>
                     </div>
 
                     <div>

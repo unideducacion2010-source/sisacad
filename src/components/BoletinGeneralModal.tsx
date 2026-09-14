@@ -54,6 +54,7 @@ export interface MateriaItem {
   profesor: string;
   creditos: number;
   area?: string;
+  grado?: string;
   estatus?: string;
 }
 
@@ -274,51 +275,122 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
     return filteredAlumnos.length > 0 ? filteredAlumnos : alumnosList;
   }, [selectedStudentForKardex, alumnosList, filteredAlumnos]);
 
-  // Standard Secondary Subject List (Matching Official Boleta)
-  const defaultSubjectNames = useMemo(() => {
-    const standard = [
-      'ESPAÑOL I',
-      'MATEMATICAS I',
-      'CIENCIAS I (ENFASIS EN BIOLOGIA)',
-      'GEOGRAFIA DE MEXICO Y DEL MUNDO',
-      'LENGUA EXTRANJERA I',
-      'EDUCACION FISICA I',
-      'TECNOLOGIA I',
-      'ARTES',
-      'ASIGNATURA ESTATAL',
-      'ORIENTACION Y TUTORIA'
-    ];
-    
-    // If system has distinct registered materias, integrate them
-    if (materiasList && materiasList.length > 0) {
-      const custom = materiasList.map(m => m.nombre.toUpperCase());
-      const combined = [...standard];
-      custom.forEach(c => {
-        if (!combined.some(s => s.includes(c) || c.includes(s))) {
-          combined.push(c);
-        }
-      });
-      return combined;
-    }
-    return standard;
-  }, [materiasList]);
+  // Helper function to extract grade number (1, 2, 3, 4, 5, 6) from any grade string
+  const normalizeGradoNumber = (gradoStr?: string): string => {
+    if (!gradoStr) return '';
+    const str = gradoStr.toString().toLowerCase().trim();
+    if (str.includes('1') || str.includes('primer') || str.includes('1er') || str.includes('1ro')) return '1';
+    if (str.includes('2') || str.includes('segundo') || str.includes('2do') || str.includes('2da')) return '2';
+    if (str.includes('3') || str.includes('tercer') || str.includes('3ro') || str.includes('3ra') || str.includes('3er')) return '3';
+    if (str.includes('4') || str.includes('cuarto') || str.includes('4to') || str.includes('4ta')) return '4';
+    if (str.includes('5') || str.includes('quinto') || str.includes('5to') || str.includes('5ta')) return '5';
+    if (str.includes('6') || str.includes('sexto') || str.includes('6to') || str.includes('6ta')) return '6';
+    return str;
+  };
 
-  // Function to get grades row for a student across all subjects
+  const matchesMateriaGrado = (materiaGrado?: string, alumnoGrado?: string): boolean => {
+    if (!materiaGrado || materiaGrado === 'Todos' || materiaGrado === 'Todos los grados') return true;
+    if (!alumnoGrado) return true;
+    const numMat = normalizeGradoNumber(materiaGrado);
+    const numAlum = normalizeGradoNumber(alumnoGrado);
+    if (numMat && numAlum) {
+      return numMat === numAlum;
+    }
+    return materiaGrado.toLowerCase().trim() === alumnoGrado.toLowerCase().trim();
+  };
+
+  // Function to get grades row for a student strictly corresponding to their grade level
   const getStudentSubjectGrades = (student: AlumnoItem) => {
     const studentName1 = `${student.nombres} ${student.apellidos}`.toLowerCase();
     const studentName2 = `${student.apellidos} ${student.nombres}`.toLowerCase();
 
-    return defaultSubjectNames.map(subj => {
+    // 1. Determine subject list strictly for student's grade
+    let subjectNamesForStudent: string[] = [];
+    const gradeNumber = normalizeGradoNumber(student.grado);
+
+    // Custom materias matching grade
+    const customMatching = (materiasList || []).filter(m => matchesMateriaGrado(m.grado, student.grado));
+
+    if (customMatching.length > 0) {
+      subjectNamesForStudent = customMatching.map(m => m.nombre.toUpperCase());
+    } else {
+      // Standard grade subject defaults
+      if (gradeNumber === '2') {
+        subjectNamesForStudent = [
+          'ESPAÑOL II',
+          'MATEMATICAS II',
+          'CIENCIAS II (ENFASIS EN FISICA)',
+          'HISTORIA I',
+          'LENGUA EXTRANJERA II',
+          'FORMACION CIVICA Y ETICA I',
+          'EDUCACION FISICA II',
+          'TECNOLOGIA II',
+          'ARTES II',
+          'ORIENTACION Y TUTORIA'
+        ];
+      } else if (gradeNumber === '3') {
+        subjectNamesForStudent = [
+          'ESPAÑOL III',
+          'MATEMATICAS III',
+          'CIENCIAS III (ENFASIS EN QUIMICA)',
+          'HISTORIA II',
+          'LENGUA EXTRANJERA III',
+          'FORMACION CIVICA Y ETICA II',
+          'EDUCACION FISICA III',
+          'TECNOLOGIA III',
+          'ARTES III',
+          'ORIENTACION Y TUTORIA'
+        ];
+      } else if (gradeNumber === '4' || gradeNumber === '5' || gradeNumber === '6') {
+        subjectNamesForStudent = [
+          'ESPAÑOL',
+          'MATEMATICAS',
+          'CIENCIAS NATURALES',
+          'GEOGRAFIA',
+          'HISTORIA',
+          'FORMACION CIVICA Y ETICA',
+          'EDUCACION ARTISTICA',
+          'EDUCACION FISICA'
+        ];
+      } else {
+        // Default / 1st grade
+        subjectNamesForStudent = [
+          'ESPAÑOL I',
+          'MATEMATICAS I',
+          'CIENCIAS I (ENFASIS EN BIOLOGIA)',
+          'GEOGRAFIA DE MEXICO Y DEL MUNDO',
+          'LENGUA EXTRANJERA I',
+          'EDUCACION FISICA I',
+          'TECNOLOGIA I',
+          'ARTES I',
+          'ASIGNATURA ESTATAL',
+          'ORIENTACION Y TUTORIA'
+        ];
+      }
+    }
+
+    // Also include any specific materias registered in calificacionesList for this student
+    const studentCalifs = calificacionesList.filter(c => {
+      const cAlum = (c.alumno || '').toLowerCase();
+      return cAlum === studentName1 || cAlum === studentName2 || cAlum.includes(student.nombres.toLowerCase());
+    });
+
+    studentCalifs.forEach(c => {
+      const matUpper = c.materia.toUpperCase();
+      if (!subjectNamesForStudent.some(s => s === matUpper || s.includes(matUpper) || matUpper.includes(s))) {
+        subjectNamesForStudent.push(matUpper);
+      }
+    });
+
+    return subjectNamesForStudent.map(subj => {
       // Find matching calificaciones for this student and subject
-      const matches = calificacionesList.filter(c => {
-        const cAlum = (c.alumno || '').toLowerCase();
-        const isStudent = cAlum === studentName1 || cAlum === studentName2 || cAlum.includes(student.nombres.toLowerCase());
-        const isSubject = (c.materia || '').toLowerCase().includes(subj.toLowerCase().slice(0, 5)) ||
-                          subj.toLowerCase().includes((c.materia || '').toLowerCase().slice(0, 5));
-        return isStudent && isSubject;
+      const matches = studentCalifs.filter(c => {
+        const cMat = (c.materia || '').toLowerCase();
+        const sMat = subj.toLowerCase();
+        return cMat.includes(sMat.slice(0, 5)) || sMat.includes(cMat.slice(0, 5));
       });
 
-      // Map parials or bimestres
+      // Map partials or bimestres
       const p1 = matches.find(m => m.parcial.includes('1') || m.parcial.toLowerCase().includes('sep'))?.calificacion;
       const p2 = matches.find(m => m.parcial.includes('2') || m.parcial.toLowerCase().includes('nov'))?.calificacion;
       const p3 = matches.find(m => m.parcial.includes('3') || m.parcial.toLowerCase().includes('ene'))?.calificacion;
@@ -382,8 +454,8 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
   // Filtered Students for "Lista de Asistencia"
   const asistenciaAlumnos = useMemo(() => {
     const list = alumnosList.filter(a => {
-      const matchGrado = asistenciaGrado === 'Todos' || a.grado === asistenciaGrado;
-      const matchGrupo = asistenciaGrupo === 'Todos' || (a.grupo || 'A') === asistenciaGrupo;
+      const matchGrado = asistenciaGrado === 'Todos' || matchesMateriaGrado(a.grado, asistenciaGrado) || a.grado === asistenciaGrado;
+      const matchGrupo = asistenciaGrupo === 'Todos' || (a.grupo || 'A').toUpperCase() === asistenciaGrupo.toUpperCase();
       return matchGrado && matchGrupo;
     });
     return list.sort((a, b) => {
@@ -393,7 +465,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
     });
   }, [alumnosList, asistenciaGrado, asistenciaGrupo]);
 
-  // Processed Attendance Data (4 Weeks x 5 Days = 20 Days, matching official didocu template)
+  // Processed Attendance Data (Blank Official Roll-Call Format for Chosen Group)
   const attendanceProcessedData = useMemo(() => {
     const daysCount = 20;
     const rows = asistenciaAlumnos.map((a, idx) => {
@@ -402,23 +474,9 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
         ? `${a.apellidos} ${a.nombres}`.trim() 
         : a.nombres.trim();
 
-      // Realistic attendance pattern for 20 days:
-      // Row 0 has the exact example pattern from image if desired
-      let marks: ('A' | 'R' | 'F' | 'J')[];
-      if (idx === 0 && rowsZeroPattern(a)) {
-        marks = ['A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'R', 'F', 'A', 'A', 'A', 'A', 'F', 'A', 'A', 'A', 'A'];
-      } else {
-        marks = Array.from({ length: 20 }, (_, dIdx) => {
-          const pseudoRandom = ((idx * 17 + dIdx * 31 + 7) % 100);
-          if (pseudoRandom < 88) return 'A';
-          if (pseudoRandom < 94) return 'R';
-          return 'F';
-        });
-      }
-
-      const countA = marks.filter(m => m === 'A').length;
-      const countR = marks.filter(m => m === 'R').length;
-      const porcentaje = Math.round(((countA + countR * 0.5) / 20) * 100);
+      // Blank marks array for empty printable sheet / manual check-in
+      const marks: string[] = Array.from({ length: 20 }, () => '');
+      const porcentaje = '';
 
       return {
         idx: idx + 1,
@@ -430,22 +488,13 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
       };
     });
 
-    function rowsZeroPattern(st: AlumnoItem) {
-      return st.nombres.toLowerCase().includes('joaquin') || true;
-    }
-
     const conteoH = rows.filter(r => r.genero === 'H').length;
     const conteoM = rows.filter(r => r.genero === 'M').length;
     const totalAlumnos = rows.length;
 
-    // Daily totals for 20 days (sum of students present)
-    const dailyTotals = Array.from({ length: daysCount }, (_, dIdx) => {
-      return rows.filter(r => r.marks[dIdx] === 'A' || r.marks[dIdx] === 'R').length;
-    });
-
-    const averagePorcentaje = rows.length > 0
-      ? (rows.reduce((acc, r) => acc + r.porcentaje, 0) / rows.length).toFixed(1)
-      : '0';
+    // Daily totals for 20 days (blank)
+    const dailyTotals: string[] = Array.from({ length: daysCount }, () => '');
+    const averagePorcentaje = '';
 
     return {
       rows,
@@ -1388,7 +1437,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                   </div>
                   <div className="bg-white/10 backdrop-blur-xs px-3.5 py-2 rounded-lg border border-white/15 text-center">
                     <p className="text-[10px] uppercase text-emerald-200 font-semibold tracking-wider">% Asistencia</p>
-                    <p className="text-base font-extrabold text-emerald-300">{attendanceProcessedData.averagePorcentaje}%</p>
+                    <p className="text-base font-extrabold text-emerald-300">Formato Vacío</p>
                   </div>
                   <div className="bg-white/10 backdrop-blur-xs px-3.5 py-2 rounded-lg border border-white/15 text-center">
                     <p className="text-[10px] uppercase text-amber-200 font-semibold tracking-wider">Hombres / Mujeres</p>
@@ -1542,10 +1591,10 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                           </tr>
                           <tr className="border-b border-black">
                             <td className="border-r border-black px-2.5 py-1 font-bold text-black uppercase bg-slate-50">
-                              GRUPO: <span className="font-normal text-black ml-2">{asistenciaGrupo !== 'Todos' ? asistenciaGrupo : 'B'}</span>
+                              GRUPO: <span className="font-normal text-black ml-2">{asistenciaGrupo !== 'Todos' ? asistenciaGrupo : 'TODOS'}</span>
                             </td>
                             <td className="px-2.5 py-1 font-bold text-black uppercase">
-                              GRADO: <span className="font-normal text-black ml-2">{asistenciaGrado !== 'Todos' ? asistenciaGrado : '3'}</span>
+                              GRADO: <span className="font-normal text-black ml-2">{asistenciaGrado !== 'Todos' ? asistenciaGrado : 'TODOS'}</span>
                             </td>
                           </tr>
                           <tr>
@@ -2207,10 +2256,10 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                   </tr>
                   <tr className="border-b border-black">
                     <td className="border-r border-black px-2 py-0.5 font-bold text-black uppercase bg-slate-100">
-                      GRUPO: <span className="font-normal text-black ml-2">{asistenciaGrupo !== 'Todos' ? asistenciaGrupo : 'B'}</span>
+                      GRUPO: <span className="font-normal text-black ml-2">{asistenciaGrupo !== 'Todos' ? asistenciaGrupo : 'TODOS'}</span>
                     </td>
                     <td className="px-2 py-0.5 font-bold text-black uppercase">
-                      GRADO: <span className="font-normal text-black ml-2">{asistenciaGrado !== 'Todos' ? asistenciaGrado : '3'}</span>
+                      GRADO: <span className="font-normal text-black ml-2">{asistenciaGrado !== 'Todos' ? asistenciaGrado : 'TODOS'}</span>
                     </td>
                   </tr>
                   <tr>

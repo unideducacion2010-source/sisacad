@@ -57,6 +57,7 @@ interface MateriaItem {
   profesor: string;
   creditos: number;
   area?: string;
+  grado?: string;
   estatus?: string;
 }
 
