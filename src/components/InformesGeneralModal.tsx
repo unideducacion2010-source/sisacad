@@ -226,11 +226,11 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200">
-      <div className="bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 w-full max-w-[1300px] max-h-[95vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200 print:bg-white print:p-0 print:static print:inset-auto">
+      <div className="bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 w-full max-w-[1300px] max-h-[95vh] flex flex-col overflow-hidden print:max-h-none print:overflow-visible print:border-none print:shadow-none print:bg-white print:w-full">
         
         {/* Top Floating App Action Bar (Sheets, Print, Export, Close) */}
-        <div className="px-5 py-2.5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+        <div className="px-5 py-2.5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 print:hidden">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
             <span className="text-xs font-semibold tracking-wide text-slate-200 uppercase">
@@ -277,7 +277,7 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
         </div>
 
         {/* Submenu 3 Navigation Buttons */}
-        <div className="px-5 py-2.5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+        <div className="px-5 py-2.5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-xs print:hidden">
           <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
             <button
               type="button"
@@ -337,7 +337,7 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
         </div>
 
         {/* Scrollable Modal Content Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-slate-200/60">
+        <div id="informe-print-area" className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-slate-200/60 print:bg-white print:p-2 print:overflow-visible">
 
           {/* ========================================================================= */}
           {/* TAB 1: INFORMES CICLO ESCOLAR (DESIGN REPLICA OF THE UPLOADED REFERENCE) */}
