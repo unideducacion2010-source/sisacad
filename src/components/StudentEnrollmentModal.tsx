@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DEFAULT_VILLA_MONTESSORI_LOGO } from '../assets/logo';
+import { CentroEscolarData } from './CentroEscolarView';
 
 export interface StudentFormData {
   id?: string;
@@ -92,6 +93,7 @@ interface StudentEnrollmentModalProps {
   institutionName?: string;
   institutionLogo?: string;
   cicloEscolar?: string;
+  centroEscolar?: CentroEscolarData;
 }
 
 export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
@@ -101,8 +103,11 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
   initialData,
   institutionName = 'VILLA MONTESSORI DE MORELIA',
   institutionLogo,
-  cicloEscolar = 'CICLO ESCOLAR 2026-2027'
+  cicloEscolar = 'CICLO ESCOLAR 2026-2027',
+  centroEscolar
 }) => {
+  const effectiveSchoolName = centroEscolar?.nombre || institutionName;
+  const effectiveLogo = centroEscolar?.logoUrl || institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO;
   const [formData, setFormData] = useState<StudentFormData>({
     matricula: '',
     nombres: '',
@@ -286,7 +291,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-base tracking-wide flex items-center gap-2">
-                <span>{institutionName}</span>
+                <span>{effectiveSchoolName}</span>
                 <span className="text-xs bg-amber-400/90 text-amber-950 font-bold px-2 py-0.5 rounded-full uppercase">
                   SysAcad Pro
                 </span>
@@ -1317,12 +1322,12 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
                 <div className="flex items-center justify-between border-b-2 border-slate-800 pb-4">
                   <div className="flex items-center gap-3">
                     <img 
-                      src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                      src={effectiveLogo} 
                       alt="Logo" 
                       className="w-12 h-12 object-contain shrink-0" 
                     />
                     <div>
-                      <h2 className="text-lg font-bold text-slate-900 uppercase">{institutionName}</h2>
+                      <h2 className="text-lg font-bold text-slate-900 uppercase">{effectiveSchoolName}</h2>
                       <p className="text-xs text-slate-600 font-semibold">CÉDULA OFICIAL DE INSCRIPCIÓN / REINSCRIPCIÓN</p>
                     </div>
                   </div>

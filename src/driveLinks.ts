@@ -35,6 +35,14 @@ export type DriveCategory =
   | 'ciclo' 
   | 'control-escolar' 
   | 'reportes'
+  | 'boletas'
+  | 'boletin'
+  | 'constancias'
+  | 'solicitudes'
+  | 'centro-escolar'
+  | 'plantel'
+  | 'pagos'
+  | 'colegiaturas'
   | 'general';
 
 export interface DriveLinkResolution {
@@ -162,6 +170,44 @@ export function resolveDriveFolderLink(
           const n = f.name.toLowerCase();
           return n.includes('06_') || n.includes('kardex') || n.includes('reporte');
         }) || subfolders.find(f => f.name.toLowerCase().includes('04_') || f.name.toLowerCase().includes('calificaci'));
+        break;
+
+      case 'boletas':
+      case 'boletin':
+        matched = subfolders.find(f => {
+          const n = f.name.toLowerCase();
+          return n.includes('13_') || n.includes('boleta') || n.includes('sep');
+        }) || subfolders.find(f => f.name.toLowerCase().includes('04_') || f.name.toLowerCase().includes('calificaci'));
+        break;
+
+      case 'constancias':
+        matched = subfolders.find(f => {
+          const n = f.name.toLowerCase();
+          return n.includes('14_') || n.includes('constancia') || n.includes('tramite');
+        });
+        break;
+
+      case 'solicitudes':
+        matched = subfolders.find(f => {
+          const n = f.name.toLowerCase();
+          return n.includes('15_') || n.includes('solicitud') || n.includes('modificaci');
+        });
+        break;
+
+      case 'centro-escolar':
+      case 'plantel':
+        matched = subfolders.find(f => {
+          const n = f.name.toLowerCase();
+          return n.includes('16_') || n.includes('centro') || n.includes('plantel');
+        });
+        break;
+
+      case 'pagos':
+      case 'colegiaturas':
+        matched = subfolders.find(f => {
+          const n = f.name.toLowerCase();
+          return n.includes('17_') || n.includes('pago') || n.includes('colegiatura');
+        });
         break;
 
       case 'ciclo':

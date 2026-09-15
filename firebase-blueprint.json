@@ -13,6 +13,10 @@
           "type": "string",
           "description": "Logo URL or base64 of the school"
         },
+        "centroEscolar": {
+          "type": "object",
+          "description": "Comprehensive school center data including CCT, director, address, zone and contact details"
+        },
         "adminEmail": {
           "type": "string",
           "description": "Administrator contact email"

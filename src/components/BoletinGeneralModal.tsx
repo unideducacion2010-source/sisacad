@@ -13,10 +13,12 @@ import {
   Building,
   CheckCircle2,
   Calendar,
-  FileText
+  FileText,
+  UserCheck
 } from 'lucide-react';
 import { resolveDriveFolderLink } from '../driveLinks';
 import { DEFAULT_VILLA_MONTESSORI_LOGO } from '../assets/logo';
+import { CentroEscolarData } from './CentroEscolarView';
 
 export interface AlumnoItem {
   id: string;
@@ -96,6 +98,7 @@ interface BoletinGeneralModalProps {
   workspaceResult?: any;
   playClickSound?: () => void;
   playSuccessSound?: () => void;
+  centroEscolar?: CentroEscolarData;
 }
 
 export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
@@ -111,9 +114,39 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
   folderLink,
   workspaceResult,
   playClickSound,
-  playSuccessSound
+  playSuccessSound,
+  systemUsers,
+  centroEscolar
 }) => {
-  const effectiveLogo = institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO;
+  const effectiveSchoolName = centroEscolar?.nombre || institutionName || 'CENTRO EDUCATIVO "VILLA MONTESSORI DE MORELIA"';
+  const effectiveCct = centroEscolar?.cct || '16PPR0123Z';
+  const effectiveColonia = centroEscolar?.colonia || 'DR. MANUEL VELASCO SUAREZ';
+  const effectiveMunicipio = centroEscolar?.municipio || 'MORELIA';
+  const effectiveEstado = centroEscolar?.estado || 'MICHOACÁN';
+  const effectiveDirector = centroEscolar?.director || 'LIC. PATRICIA RAMÍREZ GUZMÁN';
+  const effectiveLema = centroEscolar?.lema || 'Comunidad Educativa';
+  const effectiveTurno = centroEscolar?.turno || 'MATUTINO';
+  const effectiveLogo = centroEscolar?.logoUrl || institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO;
+
+  // List of registered teachers for the asesor listbox
+  const maestrosOptions = useMemo(() => {
+    const list: string[] = [];
+    if (systemUsers && Array.isArray(systemUsers)) {
+      systemUsers
+        .filter(u => u.role === 'Maestros' || (u.role as string) === 'Docente' || u.role === 'Directivo')
+        .forEach(u => {
+          const name = u.name || u.username;
+          if (name && !list.includes(name)) list.push(name);
+        });
+    }
+    ['Patricia Ramírez', 'Adi', 'Juan Carlos Mendoza', 'Ana María Torres'].forEach(doc => {
+      if (!list.includes(doc)) list.push(doc);
+    });
+    return list;
+  }, [systemUsers]);
+
+  const [globalAsesor, setGlobalAsesor] = useState<string>('');
+  const [studentAsesorMap, setStudentAsesorMap] = useState<Record<string, string>>({});
 
   // 3 Primary Options
   const [activeTab, setActiveTab] = useState<'alumnos' | 'kardex' | 'asistencia'>('alumnos');
@@ -534,7 +567,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
   const exportAlumnosToCSV = () => {
     let csv = '\uFEFF';
     const sanitize = (t: any) => `"${String(t || '').replace(/"/g, '""')}"`;
-    csv += `LISTA DE ALUMNOS - ${institutionName.toUpperCase()}\n`;
+    csv += `LISTA DE ALUMNOS - ${effectiveSchoolName.toUpperCase()}\n`;
     csv += `Ciclo Escolar: ${activeCycle.nombre} | Fecha: ${currentDateFormatted}\n\n`;
     csv += 'No.,Nombre del Alumno,Matrícula,Grado,Grupo,CURP,Correo Electrónico,Estatus\n';
     
@@ -565,7 +598,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
   const exportKardexToCSV = () => {
     let csv = '\uFEFF';
     const sanitize = (t: any) => `"${String(t || '').replace(/"/g, '""')}"`;
-    csv += `KARDEX GENERAL DE CALIFICACIONES - ${institutionName.toUpperCase()}\n`;
+    csv += `KARDEX GENERAL DE CALIFICACIONES - ${effectiveSchoolName.toUpperCase()}\n`;
     csv += `Ciclo Escolar: ${activeCycle.nombre} | Fecha: ${currentDateFormatted}\n\n`;
     csv += 'No.,Alumno,Materia,Evaluación / Parcial,Calificación,Estatus,Observaciones\n';
     
@@ -595,7 +628,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
   const exportAsistenciaToCSV = () => {
     let csv = '\uFEFF';
     const sanitize = (t: any) => `"${String(t || '').replace(/"/g, '""')}"`;
-    csv += `LISTA DE ASISTENCIA OFICIAL - ${institutionName.toUpperCase()}\n`;
+    csv += `LISTA DE ASISTENCIA OFICIAL - ${effectiveSchoolName.toUpperCase()}\n`;
     csv += `Ciclo Escolar: ${activeCycle.nombre} | Mes: ${asistenciaMes} ${asistenciaYear} | Docente: ${asistenciaDocente}\n`;
     csv += `Grado: ${asistenciaGrado} | Grupo: ${asistenciaGrupo}\n\n`;
     
@@ -653,7 +686,27 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
     if (gradoStr.includes('1') || gradoStr.toLowerCase().includes('primer')) return 'PRIMER GRADO';
     if (gradoStr.includes('2') || gradoStr.toLowerCase().includes('segundo')) return 'SEGUNDO GRADO';
     if (gradoStr.includes('3') || gradoStr.toLowerCase().includes('tercer')) return 'TERCER GRADO';
-    return `${gradoStr.toUpperCase()} GRADO`;
+    let cleaned = gradoStr.replace(/grado/gi, '').trim();
+    return `${cleaned.toUpperCase()} GRADO`;
+  };
+
+  // Helper to extract clean grade (e.g. '2do Grado' -> '2DO', '1er Grado' -> '1RO', '3ro Grado' -> '3RO', '2°' -> '2DO')
+  const cleanGradoText = (gradoRaw?: string): string => {
+    if (!gradoRaw || gradoRaw.toLowerCase() === 'todos') return 'TODOS';
+    let cleaned = gradoRaw.replace(/grado/gi, '').replace(/[.°º#"'–—\-]/g, '').trim();
+    if (/^1(er|o|ro)?$/i.test(cleaned) || /primer/i.test(cleaned) || cleaned === '1') return '1RO';
+    if (/^2(do|o)?$/i.test(cleaned) || /segundo/i.test(cleaned) || cleaned === '2') return '2DO';
+    if (/^3(ro|er|o)?$/i.test(cleaned) || /tercer/i.test(cleaned) || cleaned === '3') return '3RO';
+    if (/^4(to|o)?$/i.test(cleaned) || /cuarto/i.test(cleaned) || cleaned === '4') return '4TO';
+    if (/^5(to|o)?$/i.test(cleaned) || /quinto/i.test(cleaned) || cleaned === '5') return '5TO';
+    if (/^6(to|o)?$/i.test(cleaned) || /sexto/i.test(cleaned) || cleaned === '6') return '6TO';
+    return cleaned.toUpperCase() || '1RO';
+  };
+
+  const cleanGrupoText = (grupoRaw?: string): string => {
+    if (!grupoRaw || grupoRaw.toLowerCase() === 'todos') return 'TODOS';
+    let cleaned = grupoRaw.replace(/grupo/gi, '').replace(/[.°º#"'–—\-]/g, '').trim();
+    return cleaned.toUpperCase() || 'A';
   };
 
   // Helper to render official SEP header matching Michoacán format
@@ -786,9 +839,9 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
               <img src={effectiveLogo} alt="Logo" className="w-full h-full object-contain rounded-full" />
             </div>
             <div>
-              <h1 className="font-serif font-black text-2xl tracking-wide text-slate-900 leading-none">Villa Montessori</h1>
-              <p className="font-semibold text-xs text-amber-900 tracking-wider">Comunidad Educativa</p>
-              <p className="font-extrabold text-sm text-slate-900 uppercase tracking-wide mt-1">Reporte de Calificaciones</p>
+              <h1 className="font-serif font-black text-2xl tracking-wide text-slate-900 leading-none">{effectiveSchoolName}</h1>
+              <p className="font-semibold text-xs text-amber-900 tracking-wider">{effectiveLema}</p>
+              <p className="font-extrabold text-sm text-slate-900 uppercase tracking-wide mt-1">Reporte de Calificaciones (Temporal)</p>
             </div>
           </div>
           <div className="text-right">
@@ -812,8 +865,31 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-amber-950 font-extrabold uppercase">ASESOR:</span>
-            <span className="uppercase font-bold text-slate-900">{std.tutor || 'Adi'}</span>
+            <span className="text-amber-950 font-extrabold uppercase flex items-center gap-1">
+              <GraduationCap size={13} className="text-amber-800" />
+              <span>ASESOR:</span>
+            </span>
+            {!isPrint ? (
+              <select
+                value={studentAsesorMap[stdKey] || globalAsesor || std.tutor || 'Adi'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setStudentAsesorMap(prev => ({ ...prev, [stdKey]: val }));
+                  playClickSound?.();
+                }}
+                className="uppercase font-bold text-slate-900 bg-amber-100 hover:bg-amber-200 border border-amber-400 rounded-md px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-600 cursor-pointer shadow-2xs"
+                title="Seleccionar maestro asesor que aparecerá en esta boleta temporal"
+              >
+                <option value="">{std.tutor || 'Adi'} (Asignado)</option>
+                {maestrosOptions.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="uppercase font-bold text-slate-900 font-mono tracking-tight">
+                {studentAsesorMap[stdKey] || globalAsesor || std.tutor || 'Adi'}
+              </span>
+            )}
           </div>
         </div>
 
@@ -1086,7 +1162,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                   />
                   <div>
                     <h2 className="text-base sm:text-lg font-extrabold tracking-wide uppercase text-white">
-                      {institutionName || 'ESCUELA SECUNDARIA GENERAL Nº3'}
+                      {effectiveSchoolName}
                     </h2>
                     <p className="text-xs text-blue-200 font-medium flex items-center gap-2">
                       <span>Lista Oficial de Alumnos por Grupo</span>
@@ -1284,7 +1360,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                   />
                   <div>
                     <h2 className="text-base sm:text-lg font-extrabold tracking-wide uppercase text-white">
-                      {institutionName || 'ESCUELA SECUNDARIA GENERAL Nº3'}
+                      {effectiveSchoolName}
                     </h2>
                     <p className="text-xs text-blue-200 font-medium flex items-center gap-2">
                       <span>Kardex Oficial SEP - Boleta de Evaluación Secundaria</span>
@@ -1504,23 +1580,49 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                         {kardexPrintFormat === 'montessori' ? '📋 Reporte de Calificaciones (Villa Montessori / Temporal)' : '🎓 Boleta Oficial de Evaluación (SEP)'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setKardexPrintFormat('montessori')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                          kardexPrintFormat === 'montessori' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'bg-slate-800 text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        📋 Formato Temporal (Montessori)
-                      </button>
-                      <button
-                        onClick={() => setKardexPrintFormat('sep')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                          kardexPrintFormat === 'sep' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-800 text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        🎓 Formato SEP (Final)
-                      </button>
+
+                    <div className="flex items-center gap-3">
+                      {kardexPrintFormat === 'montessori' && (
+                        <div className="flex items-center gap-1.5 bg-slate-800 border border-amber-400/50 px-2.5 py-1 rounded-md">
+                          <span className="font-extrabold text-amber-300 text-[11px] uppercase flex items-center gap-1">
+                            <GraduationCap size={13} />
+                            <span>Asesor General:</span>
+                          </span>
+                          <select
+                            value={globalAsesor}
+                            onChange={(e) => {
+                              setGlobalAsesor(e.target.value);
+                              playClickSound?.();
+                            }}
+                            className="bg-slate-950 text-white border border-slate-700 rounded px-2 py-0.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
+                            title="Seleccione el asesor general que aparecerá en esta boleta temporal"
+                          >
+                            <option value="">-- Por Alumno / Asignado --</option>
+                            {maestrosOptions.map(m => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setKardexPrintFormat('montessori')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                            kardexPrintFormat === 'montessori' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'bg-slate-800 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          📋 Formato Temporal (Montessori)
+                        </button>
+                        <button
+                          onClick={() => setKardexPrintFormat('sep')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                            kardexPrintFormat === 'sep' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-800 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          🎓 Formato SEP (Final)
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -1543,22 +1645,22 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                           <div className="border border-black rounded-lg p-2 text-[10px] space-y-1">
                             <div className="flex justify-between items-end border-b border-dotted border-slate-300 pb-1">
                               <div>
-                                <p className="font-bold uppercase text-black">{institutionName || 'ESCUELA SECUNDARIA GENERAL Nº3'}</p>
+                                <p className="font-bold uppercase text-black">{effectiveSchoolName}</p>
                                 <p className="text-[8px] text-slate-600 uppercase">NOMBRE OFICIAL DE LA ESCUELA SEGÚN CATALOGO DE CENTRO DE TRABAJO</p>
                               </div>
                               <div className="text-right">
-                                <p className="font-mono font-bold uppercase text-black">07ETV1188Q</p>
+                                <p className="font-mono font-bold uppercase text-black">{effectiveCct}</p>
                                 <p className="text-[8px] text-slate-600 uppercase">CLAVE SEGÚN CCT</p>
                               </div>
                             </div>
                             <div className="flex justify-between items-end text-[9px] pt-0.5">
                               <div>
                                 <span className="font-bold uppercase">COLONIA O LOCALIDAD: </span>
-                                <span className="uppercase text-slate-800">DR. MANUEL VELASCO SUAREZ</span>
+                                <span className="uppercase text-slate-800">{effectiveColonia}</span>
                               </div>
                               <div>
                                 <span className="font-bold uppercase">MUNICIPIO: </span>
-                                <span className="uppercase text-slate-800">TZIMOL</span>
+                                <span className="uppercase text-slate-800">{effectiveMunicipio}</span>
                               </div>
                             </div>
                           </div>
@@ -1730,7 +1832,10 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                                 <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA DEL MAESTRO(A)</div>
                               </div>
                               <div>
-                                <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA DEL DIRECTOR(A)</div>
+                                <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">
+                                  {effectiveDirector || 'FIRMA DEL DIRECTOR(A)'}
+                                </div>
+                                <div className="text-[6.5px] uppercase mt-0.5 text-slate-600">DIRECTOR(A) DEL PLANTEL</div>
                               </div>
                               <div>
                                 <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA PADRE / TUTOR</div>
@@ -1762,7 +1867,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                   />
                   <div>
                     <h2 className="text-base sm:text-lg font-extrabold tracking-wide uppercase text-white">
-                      {institutionName || 'ESCUELA SOR JUANA'}
+                      {effectiveSchoolName}
                     </h2>
                     <p className="text-xs text-blue-200 font-medium flex items-center gap-2">
                       <span>Lista Oficial de Asistencia y Control de Grupo</span>
@@ -1928,15 +2033,15 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                               NOMBRE DE LA ESCUELA:
                             </td>
                             <td colSpan={3} className="px-2.5 py-1 font-bold text-black uppercase">
-                              {institutionName || 'ESCUELA SOR JUANA'}
+                              {effectiveSchoolName}
                             </td>
                           </tr>
                           <tr className="border-b border-black">
                             <td className="border-r border-black px-2.5 py-1 font-bold text-black uppercase bg-slate-50">
-                              GRUPO: <span className="font-normal text-black ml-2">{asistenciaGrupo !== 'Todos' ? asistenciaGrupo : 'TODOS'}</span>
+                              GRUPO: <span className="font-normal text-black ml-2">{asistenciaGrupo !== 'Todos' ? cleanGrupoText(asistenciaGrupo) : 'TODOS'}</span>
                             </td>
                             <td className="px-2.5 py-1 font-bold text-black uppercase">
-                              GRADO: <span className="font-normal text-black ml-2">{asistenciaGrado !== 'Todos' ? asistenciaGrado : 'TODOS'}</span>
+                              GRADO: <span className="font-normal text-black ml-2">{asistenciaGrado !== 'Todos' ? cleanGradoText(asistenciaGrado) : 'TODOS'}</span>
                             </td>
                           </tr>
                           <tr>
@@ -2214,7 +2319,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
         <div className="px-5 py-3 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <Building size={14} className="text-slate-400" />
-            <span>{institutionName || 'Sistema Académico'}</span>
+            <span>{effectiveSchoolName}</span>
             <span>•</span>
             <span>Boletín Oficial Académico</span>
           </div>
@@ -2248,13 +2353,13 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
               />
               <div className="text-center">
                 <h1 className="font-bold text-base uppercase tracking-wider text-black leading-tight">
-                  {institutionName ? institutionName.toUpperCase() : 'CENTRO EDUCATIVO VILLA MONTESSORI'}
+                  {effectiveSchoolName.toUpperCase()}
                 </h1>
                 <p className="font-bold text-sm uppercase text-black mt-1 leading-tight">
                   {cicloTextClean}
                 </p>
                 <p className="font-bold text-sm uppercase text-black mt-0.5 leading-tight">
-                  GRADO {printGradoText} GRUPO {printGrupoText.replace(/^grupo\s+/i, '')}
+                  GRADO {cleanGradoText(printGradoText)} GRUPO {cleanGrupoText(printGrupoText)}
                 </p>
               </div>
             </div>
@@ -2324,25 +2429,25 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                     <div className="flex justify-between items-end border-b border-dotted border-black pb-1">
                       <div>
                         <p className="font-bold uppercase text-black">
-                          {institutionName || 'ESCUELA TELESECUNDARIA 1154 VICENTE SUAREZ FERRER'}
+                          {effectiveSchoolName}
                         </p>
                         <p className="text-[7.5px] text-black uppercase">
                           NOMBRE OFICIAL DE LA ESCUELA SEGÚN CATALOGO DE CENTRO DE TRABAJO
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-mono font-bold uppercase text-black">07ETV1188Q</p>
+                        <p className="font-mono font-bold uppercase text-black">{effectiveCct}</p>
                         <p className="text-[7.5px] text-black uppercase">CLAVE SEGÚN CCT</p>
                       </div>
                     </div>
                     <div className="flex justify-between items-end text-[9px] pt-0.5">
                       <div>
                         <span className="font-bold uppercase">COLONIA O LOCALIDAD: </span>
-                        <span className="uppercase text-black">DR. MANUEL VELASCO SUAREZ</span>
+                        <span className="uppercase text-black">{effectiveColonia}</span>
                       </div>
                       <div>
                         <span className="font-bold uppercase">MUNICIPIO O DELEGACION POLITICA: </span>
-                        <span className="uppercase text-black">TZIMOL</span>
+                        <span className="uppercase text-black">{effectiveMunicipio}</span>
                       </div>
                     </div>
                   </div>
@@ -2549,7 +2654,10 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                         <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA DEL MAESTRO(A)</div>
                       </div>
                       <div>
-                        <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA DEL DIRECTOR(A)</div>
+                        <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">
+                          {effectiveDirector || 'FIRMA DEL DIRECTOR(A)'}
+                        </div>
+                        <div className="text-[6px] uppercase mt-0.5 font-semibold text-black">DIRECTOR(A) DEL PLANTEL</div>
                       </div>
                       <div>
                         <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA PADRE / TUTOR</div>
@@ -2578,7 +2686,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                 />
                 <div>
                   <h1 className="text-xl font-black tracking-wide uppercase text-black leading-tight">
-                    LISTA DE ASISTENCIA — {institutionName ? institutionName.toUpperCase() : 'CENTRO EDUCATIVO VILLA MONTESSORI'}
+                    LISTA DE ASISTENCIA — {effectiveSchoolName.toUpperCase()}
                   </h1>
                   <h2 className="text-sm font-bold tracking-wide uppercase text-black leading-tight">
                     {asistenciaMes.toUpperCase()} {asistenciaYear}
@@ -2596,15 +2704,15 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                       NOMBRE DE LA ESCUELA:
                     </td>
                     <td colSpan={3} className="px-2 py-0.5 font-bold text-black uppercase">
-                      {institutionName || 'ESCUELA SOR JUANA'}
+                      {effectiveSchoolName}
                     </td>
                   </tr>
                   <tr className="border-b border-black">
                     <td className="border-r border-black px-2 py-0.5 font-bold text-black uppercase bg-slate-100">
-                      GRUPO: <span className="font-normal text-black ml-2">{asistenciaGrupo !== 'Todos' ? asistenciaGrupo : 'TODOS'}</span>
+                      GRUPO: <span className="font-normal text-black ml-2">{asistenciaGrupo !== 'Todos' ? cleanGrupoText(asistenciaGrupo) : 'TODOS'}</span>
                     </td>
                     <td className="px-2 py-0.5 font-bold text-black uppercase">
-                      GRADO: <span className="font-normal text-black ml-2">{asistenciaGrado !== 'Todos' ? asistenciaGrado : 'TODOS'}</span>
+                      GRADO: <span className="font-normal text-black ml-2">{cleanGradoText(asistenciaGrado) !== 'Todos' ? cleanGradoText(asistenciaGrado) : 'TODOS'}</span>
                     </td>
                   </tr>
                   <tr>

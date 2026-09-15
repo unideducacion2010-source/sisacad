@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { resolveDriveFolderLink } from '../driveLinks';
 import { DEFAULT_VILLA_MONTESSORI_LOGO } from '../assets/logo';
+import { CentroEscolarData } from './CentroEscolarView';
 
 interface CicloEscolarItem {
   id: string;
@@ -85,6 +86,7 @@ interface InformesGeneralModalProps {
   workspaceResult?: any;
   playClickSound?: () => void;
   playSuccessSound?: () => void;
+  centroEscolar?: CentroEscolarData;
 }
 
 export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
@@ -100,8 +102,11 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
   folderLink,
   workspaceResult,
   playClickSound,
-  playSuccessSound
+  playSuccessSound,
+  centroEscolar
 }) => {
+  const effectiveSchoolName = centroEscolar?.nombre || institutionName || 'UNIDAD EDUCATIVA';
+  const effectiveLogo = centroEscolar?.logoUrl || institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO;
   const [activeTab, setActiveTab] = useState<'ciclo' | 'docentes' | 'alumnos'>('ciclo');
 
   // Resolved Google Drive Link depending on the currently open view
@@ -174,7 +179,7 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
 
     if (activeTab === 'ciclo') {
       csvContent += 'INFORME DE KPIS - CICLO ESCOLAR\n';
-      csvContent += `Institución,${sanitize(institutionName)}\n`;
+      csvContent += `Institución,${sanitize(effectiveSchoolName)}\n`;
       csvContent += `Año Lectivo,${sanitize(selectedCycleName)}\n`;
       csvContent += `Fecha Generación,${sanitize(currentDateFormatted)}\n`;
       csvContent += `Total Estudiantes,${totalStudents}\n`;
@@ -189,7 +194,7 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
       csvContent += `Total,${totalParalelos},${totalFem},${totalMasc},${totalSum},9.02\n`;
     } else if (activeTab === 'docentes') {
       csvContent += 'INFORME DE KPIS - DOCENTES Y MAESTROS\n';
-      csvContent += `Institución,${sanitize(institutionName)}\n`;
+      csvContent += `Institución,${sanitize(effectiveSchoolName)}\n`;
       csvContent += `Total Docentes,${totalTeachers}\n`;
       csvContent += `Asistencia Docente,98.6%\n`;
       csvContent += `Cumplimiento Planeaciones,97.4%\n`;
@@ -201,7 +206,7 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
       });
     } else {
       csvContent += 'INFORME DE KPIS - ALUMNOS Y MATRÍCULA\n';
-      csvContent += `Institución,${sanitize(institutionName)}\n`;
+      csvContent += `Institución,${sanitize(effectiveSchoolName)}\n`;
       csvContent += `Matrícula Total,${totalStudents}\n`;
       csvContent += `Promedio General,9.2\n`;
       csvContent += `Tasa de Aprobación,98.1%\n`;
@@ -350,13 +355,13 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
                 {/* Brand / Logo + Institution Name */}
                 <div className="flex items-center gap-3.5 min-w-[240px] print:min-w-0 print:gap-2">
                   <img 
-                    src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                    src={effectiveLogo} 
                     alt="Logo Escuela" 
                     className="w-14 h-14 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40 print:w-9 print:h-9 print:p-0.5 shrink-0"
                   />
                   <div>
                     <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#ffc107] uppercase leading-none drop-shadow-xs font-serif print:text-base">
-                      {institutionName || 'UNIDAD EDUCATIVA'}
+                      {effectiveSchoolName}
                     </h1>
                     <p className="text-[11px] font-semibold text-slate-300 uppercase tracking-widest mt-1 print:text-[8px] print:mt-0.5">
                       Módulo de Control Escolar y Rendimiento
@@ -806,13 +811,13 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
               <div className="bg-[#0f3458] text-white rounded-xl shadow-md border border-[#0b2844] p-4 lg:p-5 flex flex-col lg:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5 min-w-[240px]">
                   <img 
-                    src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                    src={effectiveLogo} 
                     alt="Logo Escuela" 
                     className="w-14 h-14 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40 shrink-0"
                   />
                   <div>
                     <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#ffc107] uppercase leading-none font-serif">
-                      {institutionName || 'UNIDAD EDUCATIVA'}
+                      {effectiveSchoolName}
                     </h1>
                     <p className="text-[11px] font-semibold text-slate-300 uppercase tracking-widest mt-1">
                       Panel de Desempeño y Plantilla Docente
@@ -1014,13 +1019,13 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
               <div className="bg-[#0f3458] text-white rounded-xl shadow-md border border-[#0b2844] p-4 lg:p-5 flex flex-col lg:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5 min-w-[240px]">
                   <img 
-                    src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                    src={effectiveLogo} 
                     alt="Logo Escuela" 
                     className="w-14 h-14 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40 shrink-0"
                   />
                   <div>
                     <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#ffc107] uppercase leading-none font-serif">
-                      {institutionName || 'UNIDAD EDUCATIVA'}
+                      {effectiveSchoolName}
                     </h1>
                     <p className="text-[11px] font-semibold text-slate-300 uppercase tracking-widest mt-1">
                       Panel de Rendimiento Escolar y Matrícula Estudiantil
@@ -1231,7 +1236,7 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
             <span className="font-semibold text-slate-800">
-              {institutionName} • Datos Sincronizados con Google Workspace (Drive & Sheets)
+              {effectiveSchoolName} • Datos Sincronizados con Google Workspace (Drive & Sheets)
             </span>
           </div>
 

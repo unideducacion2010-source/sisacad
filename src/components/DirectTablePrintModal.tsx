@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { resolveDriveFolderLink } from '../driveLinks';
 import { DEFAULT_VILLA_MONTESSORI_LOGO } from '../assets/logo';
+import { CentroEscolarData } from './CentroEscolarView';
 
 export type TablePrintType = 'alumnos' | 'maestros' | 'materias' | 'calificaciones';
 
@@ -36,6 +37,7 @@ interface DirectTablePrintModalProps {
   sheetLink?: string | null;
   playClickSound?: () => void;
   playSuccessSound?: () => void;
+  centroEscolar?: CentroEscolarData;
 }
 
 export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
@@ -53,8 +55,12 @@ export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
   folderLink,
   sheetLink,
   playClickSound,
-  playSuccessSound
+  playSuccessSound,
+  centroEscolar
 }) => {
+  const effectiveSchoolName = centroEscolar?.nombre || institutionName || 'SISTEMA EDUCATIVO';
+  const effectiveLogo = centroEscolar?.logoUrl || institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO;
+  const effectiveDirector = centroEscolar?.director;
   const [searchQuery, setSearchQuery] = useState('');
   const [filterNivel, setFilterNivel] = useState('todos');
   const [filterGrado, setFilterGrado] = useState('todos');
@@ -217,7 +223,7 @@ export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-800">{getTitle()}</h2>
-              <p className="text-xs text-slate-500">{getSubtitle()} • {institutionName}</p>
+              <p className="text-xs text-slate-500">{getSubtitle()} • {effectiveSchoolName}</p>
             </div>
           </div>
 
@@ -328,14 +334,14 @@ export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
             <div className="border-b-2 border-slate-800 pb-3 mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img 
-                  src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                  src={effectiveLogo} 
                   alt="Logo" 
                   className="w-12 h-12 object-contain shrink-0" 
                   referrerPolicy="no-referrer" 
                 />
                 <div>
                   <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase">
-                    {institutionName || 'SISTEMA EDUCATIVO'}
+                    {effectiveSchoolName}
                   </h1>
                   <p className="text-xs font-bold text-slate-700 tracking-wide">
                     {getTitle()}
@@ -548,13 +554,13 @@ export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
               </div>
               <div className="text-center">
                 <div className="border-b border-slate-400 pb-8 mb-1"></div>
-                <p className="font-bold text-slate-800">Dirección Académica</p>
-                <p className="text-[9px] text-slate-500">Sello y Firma Oficial</p>
+                <p className="font-bold text-slate-800">{effectiveDirector ? `${effectiveDirector}` : 'Dirección Académica'}</p>
+                <p className="text-[9px] text-slate-500">Dirección del Plantel • Sello y Firma Oficial</p>
               </div>
             </div>
 
             <div className="mt-4 pt-2 border-t border-slate-100 flex justify-between items-center text-[9px] text-slate-400">
-              <span>{institutionName} • Sistema de Gestión Escolar</span>
+              <span>{effectiveSchoolName} • Sistema de Gestión Escolar</span>
               <span>Documento Oficial de Registro • didocu</span>
             </div>
 

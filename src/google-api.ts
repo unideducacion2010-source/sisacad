@@ -83,6 +83,44 @@ export async function writeSheetHeaders(token: string, spreadsheetId: string) {
   return writeAllMasterHeaders(token, spreadsheetId);
 }
 
+export const WORKSPACE_SUBFOLDER_NAMES = [
+  '01_Alumnos_Expedientes',
+  '02_Maestros_y_Docentes',
+  '03_Materias_y_Planes',
+  '04_Calificaciones_y_Actas',
+  '05_Control_Escolar',
+  '06_Kardex_y_Reportes',
+  '07_Usuarios_Sistema',
+  '08_Avisos_y_Tareas_Programadas',
+  '09_Respaldos_del_Sistema',
+  '10_Asistencias_y_Listas',
+  '11_Credenciales_y_Formatos',
+  '12_Informes_y_Estadisticas',
+  '13_Boletas_Oficiales_SEP',
+  '14_Constancias_y_Tramites',
+  '15_Solicitudes_y_Modificaciones',
+  '16_Centro_Escolar_y_Plantel',
+  '17_Pagos_y_Colegiaturas'
+];
+
+export const WORKSPACE_REQUIRED_TABS = [
+  'Alumnos',
+  'Maestros',
+  'Materias',
+  'Ciclos_Escolares',
+  'Calificaciones',
+  'Control_Escolar',
+  'Kardex',
+  'Usuarios_Sistema',
+  'Avisos_y_Tareas',
+  'Asistencias',
+  'Informes_Estadisticas',
+  'Solicitudes_Calificaciones',
+  'Constancias_Emitidas',
+  'Pagos_y_Colegiaturas',
+  'Centro_Escolar'
+];
+
 export async function createFullMasterSpreadsheet(token: string, title: string) {
   const response = await fetch(SHEETS_API_URL, {
     method: 'POST',
@@ -92,22 +130,7 @@ export async function createFullMasterSpreadsheet(token: string, title: string) 
     },
     body: JSON.stringify({
       properties: { title },
-      sheets: [
-        { properties: { title: 'Alumnos' } },
-        { properties: { title: 'Maestros' } },
-        { properties: { title: 'Materias' } },
-        { properties: { title: 'Ciclos_Escolares' } },
-        { properties: { title: 'Calificaciones' } },
-        { properties: { title: 'Control_Escolar' } },
-        { properties: { title: 'Kardex' } },
-        { properties: { title: 'Usuarios_Sistema' } },
-        { properties: { title: 'Avisos_y_Tareas' } },
-        { properties: { title: 'Asistencias' } },
-        { properties: { title: 'Informes_Estadisticas' } },
-        { properties: { title: 'Solicitudes_Calificaciones' } },
-        { properties: { title: 'Constancias_Emitidas' } },
-        { properties: { title: 'Pagos_y_Colegiaturas' } },
-      ],
+      sheets: WORKSPACE_REQUIRED_TABS.map(tab => ({ properties: { title: tab } })),
     }),
   });
 
@@ -128,24 +151,7 @@ export async function ensureSpreadsheetTabs(token: string, spreadsheetId: string
     const data = await response.json();
     const existingTitles: string[] = (data.sheets || []).map((s: any) => s.properties?.title).filter(Boolean);
 
-    const requiredTabs = [
-      'Alumnos',
-      'Maestros',
-      'Materias',
-      'Ciclos_Escolares',
-      'Calificaciones',
-      'Control_Escolar',
-      'Kardex',
-      'Usuarios_Sistema',
-      'Avisos_y_Tareas',
-      'Asistencias',
-      'Informes_Estadisticas',
-      'Solicitudes_Calificaciones',
-      'Constancias_Emitidas',
-      'Pagos_y_Colegiaturas'
-    ];
-
-    const missingTabs = requiredTabs.filter(tab => !existingTitles.includes(tab));
+    const missingTabs = WORKSPACE_REQUIRED_TABS.filter(tab => !existingTitles.includes(tab));
 
     if (missingTabs.length > 0) {
       const requests = missingTabs.map(tab => ({
@@ -257,6 +263,29 @@ export async function writeAllMasterHeaders(token: string, spreadsheetId: string
     {
       range: 'Pagos_y_Colegiaturas!A1:H1',
       values: [['ID / Matrícula', 'Alumno', 'Cuota Inscripción', 'Colegiatura Mensual', 'Beca %', 'Día Límite Pago', 'RFC / CFDI', 'Estatus Pago']]
+    },
+    {
+      range: 'Centro_Escolar!A1:R1',
+      values: [[
+        'CCT',
+        'Nombre Oficial del Plantel',
+        'Lema',
+        'Nivel Educativo',
+        'Turno',
+        'Zona Escolar',
+        'Sector',
+        'Director(a)',
+        'Cargo Director',
+        'Subdirector(a)',
+        'Domicilio / Calle y Número',
+        'Colonia',
+        'Municipio',
+        'Estado',
+        'Código Postal',
+        'Teléfono',
+        'Correo Institucional',
+        'Última Actualización'
+      ]]
     }
   ];
 
@@ -294,6 +323,7 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     asistenciasList = [],
     solicitudesCambioList = [],
     constanciasList = [],
+    centroEscolar = {},
     activeCycleName = 'CICLO ESCOLAR 2026 - 2027'
   } = appData;
 
@@ -458,6 +488,30 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     ]
   ];
 
+  const c = centroEscolar || {};
+  const centroEscolarRows = [
+    [
+      c.cct || '',
+      c.nombre || '',
+      c.lema || '',
+      c.nivelEducativo || 'SECUNDARIA GENERAL / PRIMARIA',
+      c.turno || 'MATUTINO',
+      c.zonaEscolar || '',
+      c.sector || '',
+      c.director || '',
+      c.cargoDirector || 'DIRECTOR(A) GENERAL',
+      c.subdirector || '',
+      c.domicilio || '',
+      c.colonia || '',
+      c.municipio || '',
+      c.estado || '',
+      c.codigoPostal || '',
+      c.telefono || '',
+      c.correo || '',
+      new Date().toLocaleString()
+    ]
+  ];
+
   // First clear old data A2:Z1000 in each sheet
   const clearRanges = [
     'Alumnos!A2:Z1000',
@@ -473,7 +527,8 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     'Informes_Estadisticas!A2:Z1000',
     'Solicitudes_Calificaciones!A2:Z1000',
     'Constancias_Emitidas!A2:Z1000',
-    'Pagos_y_Colegiaturas!A2:Z1000'
+    'Pagos_y_Colegiaturas!A2:Z1000',
+    'Centro_Escolar!A2:R100'
   ];
 
   await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values:batchClear`, {
@@ -500,6 +555,7 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
   if (solicitudesRows.length > 0) dataToUpdate.push({ range: 'Solicitudes_Calificaciones!A2', values: solicitudesRows });
   if (constanciasRows.length > 0) dataToUpdate.push({ range: 'Constancias_Emitidas!A2', values: constanciasRows });
   if (pagosRows.length > 0) dataToUpdate.push({ range: 'Pagos_y_Colegiaturas!A2', values: pagosRows });
+  if (centroEscolarRows.length > 0) dataToUpdate.push({ range: 'Centro_Escolar!A2', values: centroEscolarRows });
 
   if (dataToUpdate.length > 0) {
     const response = await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values:batchUpdate`, {
@@ -523,6 +579,49 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
   }
 
   return { success: true };
+}
+
+export async function syncCentroEscolarToSheet(token: string, spreadsheetId: string, centroEscolar: any) {
+  const c = centroEscolar || {};
+  const row = [
+    c.cct || '',
+    c.nombre || '',
+    c.lema || '',
+    c.nivelEducativo || 'SECUNDARIA GENERAL / PRIMARIA',
+    c.turno || 'MATUTINO',
+    c.zonaEscolar || '',
+    c.sector || '',
+    c.director || '',
+    c.cargoDirector || 'DIRECTOR(A) GENERAL',
+    c.subdirector || '',
+    c.domicilio || '',
+    c.colonia || '',
+    c.municipio || '',
+    c.estado || '',
+    c.codigoPostal || '',
+    c.telefono || '',
+    c.correo || '',
+    new Date().toLocaleString()
+  ];
+
+  await ensureSpreadsheetTabs(token, spreadsheetId);
+  await writeAllMasterHeaders(token, spreadsheetId);
+
+  const response = await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values/Centro_Escolar!A2:R2?valueInputOption=USER_ENTERED`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [row] })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error('Error al sincronizar Centro Escolar en Sheets:', errText);
+    throw new Error('Error al sincronizar datos del Centro Escolar en Google Sheets: ' + errText);
+  }
+  return response.json();
 }
 
 export async function setupSysAcadWorkspace(token: string, appData: any, cachedResult?: WorkspaceSetupResult | null): Promise<WorkspaceSetupResult> {
@@ -603,21 +702,7 @@ export async function setupSysAcadWorkspace(token: string, appData: any, cachedR
     });
   }
 
-  const subfolderNames = [
-    '01_Alumnos_Expedientes',
-    '02_Maestros_y_Docentes',
-    '03_Materias_y_Planes',
-    '04_Calificaciones_y_Actas',
-    '05_Control_Escolar',
-    '06_Kardex_y_Reportes',
-    '07_Usuarios_Sistema',
-    '08_Avisos_y_Tareas_Programadas',
-    '09_Respaldos_del_Sistema',
-    '10_Asistencias_y_Listas',
-    '11_Credenciales_y_Formatos',
-    '12_Informes_y_Estadisticas',
-    '13_Pagos_y_Colegiaturas'
-  ];
+  const subfolderNames = WORKSPACE_SUBFOLDER_NAMES;
 
   const subfoldersList: { name: string; id: string; url: string }[] = [];
 
@@ -840,23 +925,7 @@ export async function setupSpecificCycleInDrive(
     });
   }
 
-  const subfolderNames = [
-    '01_Alumnos_Expedientes',
-    '02_Maestros_y_Docentes',
-    '03_Materias_y_Planes',
-    '04_Calificaciones_y_Actas',
-    '05_Control_Escolar',
-    '06_Kardex_y_Reportes',
-    '07_Usuarios_Sistema',
-    '08_Avisos_y_Tareas_Programadas',
-    '09_Respaldos_del_Sistema',
-    '10_Asistencias_y_Listas',
-    '11_Credenciales_y_Formatos',
-    '12_Informes_y_Estadisticas',
-    '13_Boletas_Oficiales_SEP',
-    '14_Constancias_y_Tramites',
-    '15_Solicitudes_y_Modificaciones'
-  ];
+  const subfolderNames = WORKSPACE_SUBFOLDER_NAMES;
 
   const subfoldersList: { name: string; id: string; url: string }[] = [];
 
@@ -926,7 +995,8 @@ export async function loadFullDataFromSheets(token: string, spreadsheetId: strin
       'Materias!A2:F500',
       'Calificaciones!A2:G500',
       'Usuarios_Sistema!A2:H500',
-      'Avisos_y_Tareas!A2:G500'
+      'Avisos_y_Tareas!A2:G500',
+      'Centro_Escolar!A2:R10'
     ];
 
     const url = `${SHEETS_API_URL}/${spreadsheetId}/values:batchGet?ranges=${ranges.map(r => encodeURIComponent(r)).join('&ranges=')}`;
@@ -943,6 +1013,7 @@ export async function loadFullDataFromSheets(token: string, spreadsheetId: strin
     const calificacionesRows = valueRanges[3]?.values || [];
     const usuariosRows = valueRanges[4]?.values || [];
     const avisosRows = valueRanges[5]?.values || [];
+    const centroEscolarRows = valueRanges[6]?.values || [];
 
     const loadedAlumnos = alumnosRows
       .filter((r: any[]) => r && r[2])
@@ -1008,12 +1079,37 @@ export async function loadFullDataFromSheets(token: string, spreadsheetId: strin
         timestamp: r[6] || new Date().toLocaleString()
       }));
 
+    let loadedCentroEscolar: any = null;
+    if (centroEscolarRows && centroEscolarRows.length > 0 && centroEscolarRows[0] && (centroEscolarRows[0][0] || centroEscolarRows[0][1])) {
+      const cr = centroEscolarRows[0];
+      loadedCentroEscolar = {
+        cct: cr[0] || '',
+        nombre: cr[1] || '',
+        lema: cr[2] || '',
+        nivelEducativo: cr[3] || 'SECUNDARIA GENERAL / PRIMARIA',
+        turno: cr[4] || 'MATUTINO',
+        zonaEscolar: cr[5] || '',
+        sector: cr[6] || '',
+        director: cr[7] || '',
+        cargoDirector: cr[8] || 'DIRECTOR(A) GENERAL',
+        subdirector: cr[9] || '',
+        domicilio: cr[10] || '',
+        colonia: cr[11] || '',
+        municipio: cr[12] || '',
+        estado: cr[13] || '',
+        codigoPostal: cr[14] || '',
+        telefono: cr[15] || '',
+        correo: cr[16] || ''
+      };
+    }
+
     return {
       alumnos: loadedAlumnos,
       materias: loadedMaterias,
       calificaciones: loadedCalificaciones,
       users: loadedUsers,
-      avisos: loadedAvisos
+      avisos: loadedAvisos,
+      centroEscolar: loadedCentroEscolar
     };
   } catch (e) {
     console.warn('Could not load all tables from sheets:', e);

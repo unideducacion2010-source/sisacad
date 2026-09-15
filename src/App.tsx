@@ -10,6 +10,7 @@ import { BoletinGeneralModal } from './components/BoletinGeneralModal';
 import { CalificacionesModal } from './components/CalificacionesModal';
 import { DirectTablePrintModal, TablePrintType } from './components/DirectTablePrintModal';
 import { PasswordStrengthMeter, evaluatePasswordStrength } from './components/PasswordStrengthMeter';
+import { CentroEscolarView, CentroEscolarData, DEFAULT_CENTRO_ESCOLAR } from './components/CentroEscolarView';
 import { User } from 'firebase/auth';
 import { encodeSyncPayload, decodeSyncPayload, generateMobileSyncUrl, extractSyncPayloadFromUrl } from './syncBridge';
 import { DEFAULT_VILLA_MONTESSORI_LOGO } from './assets/logo';
@@ -55,7 +56,7 @@ export default function App() {
     }
     return 'administrador';
   });
-  const [adminTab, setAdminTab] = useState<'config' | 'usuarios' | 'seguridad' | 'respaldos' | 'parametros'>('config');
+  const [adminTab, setAdminTab] = useState<'config' | 'usuarios' | 'seguridad' | 'respaldos' | 'parametros' | 'centro-escolar'>('config');
   const [isControlEscolarSubOpen, setIsControlEscolarSubOpen] = useState(true);
   const [isMaestrosSubOpen, setIsMaestrosSubOpen] = useState(true);
   const [muted, setMuted] = useState<boolean>(() => isSoundMuted());
@@ -270,6 +271,12 @@ export default function App() {
       if (serverLogo) {
         setInstitutionLogo(serverLogo);
         localStorage.setItem('sysacad_institution_logo', serverLogo);
+      }
+
+      const serverCentroEscolar = data.centroEscolar;
+      if (serverCentroEscolar && typeof serverCentroEscolar === 'object' && serverCentroEscolar.nombre) {
+        setCentroEscolar(prev => ({ ...prev, ...serverCentroEscolar }));
+        localStorage.setItem('sysacad_centro_escolar', JSON.stringify(serverCentroEscolar));
       }
 
       if (serverWorkspace) {
@@ -3174,8 +3181,8 @@ export default function App() {
   // Guard for role-based view isolation: ensure users only see their authorized view
   useEffect(() => {
     if (sessionUser) {
-      const allowedControlViews = ['control-escolar', 'alumnos', 'ciclo-escolar', 'materias', 'maestros', 'reportes', 'avisos'];
-      const allowedDirectivoViews = ['control-escolar', 'alumnos', 'ciclo-escolar', 'materias', 'maestros', 'reportes', 'avisos', 'calificaciones'];
+      const allowedControlViews = ['control-escolar', 'alumnos', 'ciclo-escolar', 'materias', 'maestros', 'reportes', 'avisos', 'centro-escolar'];
+      const allowedDirectivoViews = ['control-escolar', 'alumnos', 'ciclo-escolar', 'materias', 'maestros', 'reportes', 'avisos', 'calificaciones', 'centro-escolar'];
       if (sessionUser.role === 'Directivo' && !allowedDirectivoViews.includes(currentView)) {
         setCurrentView('alumnos');
         setIsControlEscolarSubOpen(true);
@@ -3279,6 +3286,37 @@ export default function App() {
   const [institutionLogo, setInstitutionLogo] = useState<string>(() => {
     return localStorage.getItem('sysacad_institution_logo') || DEFAULT_VILLA_MONTESSORI_LOGO;
   });
+
+  const [centroEscolar, setCentroEscolar] = useState<CentroEscolarData>(() => {
+    const saved = localStorage.getItem('sysacad_centro_escolar');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.nombre) {
+          return { ...DEFAULT_CENTRO_ESCOLAR, ...parsed };
+        }
+      } catch (e) {}
+    }
+    return DEFAULT_CENTRO_ESCOLAR;
+  });
+
+  const updateCentroEscolar = (data: CentroEscolarData) => {
+    setCentroEscolar(data);
+    localStorage.setItem('sysacad_centro_escolar', JSON.stringify(data));
+    if (data.nombre) {
+      setInstitutionName(data.nombre);
+      localStorage.setItem('sysacad_institution_name', data.nombre);
+    }
+    if (data.logoUrl) {
+      setInstitutionLogo(data.logoUrl);
+      localStorage.setItem('sysacad_institution_logo', data.logoUrl);
+    }
+    syncSystemStoreToServer({
+      centroEscolar: data,
+      institutionName: data.nombre || institutionName,
+      institutionLogo: data.logoUrl || institutionLogo
+    });
+  };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3870,7 +3908,22 @@ export default function App() {
 
             <div className="space-y-4">
               <h3 className="font-semibold text-slate-800 text-base">Trámites y Servicios Escolares</h3>
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div 
+                  className="p-5 border border-blue-200 bg-blue-50/50 hover:bg-blue-100/60 transition-all rounded-xl cursor-pointer shadow-xs group"
+                  onClick={() => {
+                    playClickSound();
+                    setCurrentView('centro-escolar');
+                  }}
+                >
+                  <div className="flex items-center gap-2.5 mb-1.5">
+                    <div className="p-2 bg-blue-600 text-white rounded-lg">
+                      <School size={18} />
+                    </div>
+                    <h4 className="font-bold text-slate-900 text-sm group-hover:text-blue-700">Centro Escolar</h4>
+                  </div>
+                  <p className="text-xs text-slate-600">Configura CCT, director, domicilio y datos oficiales que aparecen en todas las boletas, kardex e informes.</p>
+                </div>
                 <div className="p-5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => alert('Generando constancia de estudios...')}>
                   <h4 className="font-semibold text-slate-800 text-sm mb-1">Emisión de Constancias de Estudios</h4>
                   <p className="text-xs text-slate-500">Genera constancias oficiales con firma digital y folio vinculado a Google Drive.</p>
@@ -3891,6 +3944,21 @@ export default function App() {
               institutionName={institutionName || 'VILLA MONTESSORI DE MORELIA'}
               institutionLogo={institutionLogo}
               cicloEscolar="CICLO ESCOLAR 2026-2027"
+              centroEscolar={centroEscolar}
+            />
+          </div>
+        );
+      case 'centro-escolar':
+        return (
+          <div className="max-w-6xl mx-auto space-y-6">
+            <CentroEscolarView
+              initialData={centroEscolar}
+              onSave={updateCentroEscolar}
+              playSuccessSound={playSuccessSound}
+              playClickSound={playClickSound}
+              onOpenFormatsPreview={() => {
+                setIsBoletinGeneralModalOpen(true);
+              }}
             />
           </div>
         );
@@ -4049,6 +4117,7 @@ export default function App() {
               institutionName={institutionName || 'VILLA MONTESSORI DE MORELIA'}
               institutionLogo={institutionLogo}
               cicloEscolar="CICLO ESCOLAR 2026-2027"
+              centroEscolar={centroEscolar}
             />
           </div>
         );
@@ -5917,6 +5986,22 @@ export default function App() {
                   <Settings size={18} />
                   <span>Parámetros Académicos</span>
                 </button>
+
+                <button
+                  id="tab-admin-centro-escolar"
+                  onClick={() => {
+                    playClickSound();
+                    setAdminTab('centro-escolar');
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                    adminTab === 'centro-escolar'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200'
+                  }`}
+                >
+                  <School size={18} />
+                  <span>Centro Escolar</span>
+                </button>
               </div>
             </div>
 
@@ -6901,6 +6986,20 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {adminTab === 'centro-escolar' && (
+              <div className="pt-2">
+                <CentroEscolarView
+                  initialData={centroEscolar}
+                  onSave={updateCentroEscolar}
+                  playSuccessSound={playSuccessSound}
+                  playClickSound={playClickSound}
+                  onOpenFormatsPreview={() => {
+                    setIsBoletinGeneralModalOpen(true);
+                  }}
+                />
+              </div>
+            )}
           </div>
         );
       case 'usuario':
@@ -7722,7 +7821,7 @@ export default function App() {
                 className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left ${
                   !isMenuAllowed('control-escolar')
                     ? 'cursor-not-allowed text-slate-500 bg-slate-900/40'
-                    : currentView === 'control-escolar' || currentView === 'alumnos' || currentView === 'ciclo-escolar' || currentView === 'materias' || currentView === 'maestros' || currentView === 'reportes' || currentView === 'avisos'
+                    : currentView === 'control-escolar' || currentView === 'alumnos' || currentView === 'ciclo-escolar' || currentView === 'materias' || currentView === 'maestros' || currentView === 'reportes' || currentView === 'avisos' || currentView === 'centro-escolar'
                     ? 'bg-slate-800/80 text-white font-medium cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
                     : 'hover:bg-slate-800 hover:text-white cursor-pointer hover:scale-[1.02] active:scale-[0.98]'
                 }`}
@@ -7804,6 +7903,17 @@ export default function App() {
                   >
                     <Bell size={16} className="shrink-0" />
                     <span className="truncate">Avisos y Tareas</span>
+                  </button>
+                  <button 
+                    id="nav-centro-escolar-btn"
+                    onClick={() => {
+                      playNavigateSound();
+                      setCurrentView('centro-escolar');
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer text-left hover:scale-[1.02] active:scale-[0.98] ${currentView === 'centro-escolar' ? 'bg-blue-600 text-white shadow-sm font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  >
+                    <School size={16} className="shrink-0" />
+                    <span className="truncate">Centro Escolar</span>
                   </button>
                 </div>
               )}
@@ -8197,6 +8307,7 @@ export default function App() {
         workspaceResult={workspaceResult}
         playClickSound={playClickSound}
         playSuccessSound={playSuccessSound}
+        centroEscolar={centroEscolar}
       />
 
       {/* Modal Emergente: Boletín General con las 3 opciones (Lista de alumnos, Kardex de calificaciones, Lista de asistencia) */}
@@ -8215,6 +8326,7 @@ export default function App() {
         workspaceResult={workspaceResult}
         playClickSound={playClickSound}
         playSuccessSound={playSuccessSound}
+        centroEscolar={centroEscolar}
       />
 
       {/* Modal Emergente: Impresión Directa de Tablas (Alumnos, Maestros, Materias) */}
@@ -8234,6 +8346,7 @@ export default function App() {
         workspaceResult={workspaceResult}
         playClickSound={playClickSound}
         playSuccessSound={playSuccessSound}
+        centroEscolar={centroEscolar}
       />
 
       {/* Modal de Advertencia por Inactividad (10 minutos) */}
