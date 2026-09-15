@@ -167,6 +167,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
     if (initialData) {
       setFormData({
         ...initialData,
+        id: initialData.id || initialData.matricula || initialData.clave || '',
         matricula: initialData.matricula || initialData.clave || String(Math.floor(100 + Math.random() * 900)),
         nacionalidad: initialData.nacionalidad || 'Mexicana',
         municipio: initialData.municipio || 'Morelia',
@@ -179,6 +180,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
     } else {
       const randomMatricula = String(Math.floor(100 + Math.random() * 900));
       setFormData({
+        id: `ALU-${randomMatricula}`,
         matricula: randomMatricula,
         nombres: '',
         apellidoPaterno: '',
@@ -527,6 +529,37 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
                         onChange={(e) => handleInputChange('curp', e.target.value.toUpperCase())}
                         maxLength={18}
                         className="w-full px-3.5 py-2.5 bg-slate-50 border-b-2 border-slate-300 focus:border-sky-600 focus:bg-white text-sm uppercase font-mono text-slate-800 rounded-t-lg transition-colors outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center justify-between">
+                        <span>ID del Sistema / Folio</span>
+                        <span className="text-[10px] text-sky-600 font-normal">(Personalizable)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej. ALU-2026-001"
+                        value={formData.id || ''}
+                        onChange={(e) => handleInputChange('id', e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-sky-50/50 border-b-2 border-sky-400 focus:border-sky-600 focus:bg-white text-sm font-semibold text-slate-800 rounded-t-lg transition-colors outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center justify-between">
+                        <span>Matrícula</span>
+                        <span className="text-[10px] text-sky-600 font-normal">(Manual / Personalizable)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej. 101"
+                        value={formData.matricula || ''}
+                        onChange={(e) => {
+                          handleInputChange('matricula', e.target.value);
+                          if (!formData.clave) handleInputChange('clave', `ALU-${e.target.value}`);
+                        }}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border-b-2 border-slate-300 focus:border-sky-600 focus:bg-white text-sm font-mono text-slate-800 rounded-t-lg transition-colors outline-none"
                       />
                     </div>
 

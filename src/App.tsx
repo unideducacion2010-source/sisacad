@@ -1164,6 +1164,7 @@ export default function App() {
   const [materiaSearchQuery, setMateriaSearchQuery] = useState('');
   const [isMateriaModalOpen, setIsMateriaModalOpen] = useState(false);
   const [editingMateria, setEditingMateria] = useState<MateriaItem | null>(null);
+  const [formIdMateria, setFormIdMateria] = useState('');
   const [formClaveMateria, setFormClaveMateria] = useState('');
   const [formNombreMateria, setFormNombreMateria] = useState('');
   const [formProfesor, setFormProfesor] = useState('');
@@ -1196,7 +1197,9 @@ export default function App() {
 
   const handleOpenCreateMateria = () => {
     setEditingMateria(null);
-    setFormClaveMateria(`MAT-${Math.floor(100 + Math.random() * 900)}`);
+    const generatedClave = `MAT-${Math.floor(100 + Math.random() * 900)}`;
+    setFormIdMateria(generatedClave);
+    setFormClaveMateria(generatedClave);
     setFormNombreMateria('');
     setFormProfesor('');
     setFormCreditos('6');
@@ -1207,6 +1210,7 @@ export default function App() {
 
   const handleOpenEditMateria = (item: MateriaItem) => {
     setEditingMateria(item);
+    setFormIdMateria(item.id);
     setFormClaveMateria(item.clave || `MAT-${item.id.slice(-3)}`);
     setFormNombreMateria(item.nombre);
     setFormProfesor(item.profesor);
@@ -1243,10 +1247,13 @@ export default function App() {
     }
 
     const credNum = parseInt(formCreditos, 10) || 6;
+    const finalMateriaId = formIdMateria.trim() || (editingMateria ? editingMateria.id : Date.now().toString());
+
     if (editingMateria) {
       updateMaterias(materiasList.map(m => m.id === editingMateria.id ? {
         ...m,
-        clave: formClaveMateria || m.clave || `MAT-${m.id.slice(-3)}`,
+        id: finalMateriaId,
+        clave: formClaveMateria || m.clave || `MAT-${finalMateriaId.slice(-3)}`,
         nombre: formNombreMateria,
         profesor: formProfesor,
         creditos: credNum,
@@ -1256,7 +1263,7 @@ export default function App() {
       } : m));
     } else {
       const newItem: MateriaItem = {
-        id: Date.now().toString(),
+        id: finalMateriaId,
         clave: formClaveMateria || `MAT-${Math.floor(100 + Math.random() * 900)}`,
         nombre: formNombreMateria,
         profesor: formProfesor,
@@ -1308,6 +1315,7 @@ export default function App() {
   const [maestroSearchQuery, setMaestroSearchQuery] = useState('');
   const [isMaestroModalOpen, setIsMaestroModalOpen] = useState(false);
   const [editingMaestro, setEditingMaestro] = useState<SystemUser | null>(null);
+  const [formMaestroId, setFormMaestroId] = useState('');
   const [formMaestroName, setFormMaestroName] = useState('');
   const [formMaestroLogin, setFormMaestroLogin] = useState('');
   const [formMaestroPassword, setFormMaestroPassword] = useState('');
@@ -1317,6 +1325,7 @@ export default function App() {
 
   const handleOpenCreateMaestro = () => {
     setEditingMaestro(null);
+    setFormMaestroId(`MAE-${Math.floor(1000 + Math.random() * 9000)}`);
     setFormMaestroName('');
     setFormMaestroLogin('');
     setFormMaestroPassword('');
@@ -1328,6 +1337,7 @@ export default function App() {
 
   const handleOpenEditMaestro = (teacher: SystemUser) => {
     setEditingMaestro(teacher);
+    setFormMaestroId(teacher.id);
     setFormMaestroName(teacher.name);
     setFormMaestroLogin(teacher.username || '');
     setFormMaestroPassword(teacher.password || '');
@@ -1372,10 +1382,13 @@ export default function App() {
       return;
     }
 
+    const finalMaestroId = formMaestroId.trim() || (editingMaestro ? editingMaestro.id : Date.now().toString());
+
     let updatedList: SystemUser[];
     if (editingMaestro) {
       updatedList = systemUsers.map(u => u.id === editingMaestro.id ? {
         ...u,
+        id: finalMaestroId,
         name: formMaestroName.trim(),
         username: finalLogin,
         password: finalPassword,
@@ -1385,7 +1398,7 @@ export default function App() {
       } : u);
     } else {
       const newTeacher: SystemUser = {
-        id: Date.now().toString(),
+        id: finalMaestroId,
         name: formMaestroName.trim(),
         username: finalLogin,
         password: finalPassword,
@@ -2000,6 +2013,7 @@ export default function App() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
 
+  const [formUserId, setFormUserId] = useState('');
   const [formUserName, setFormUserName] = useState('');
   const [formUserLogin, setFormUserLogin] = useState('');
   const [formUserPassword, setFormUserPassword] = useState('');
@@ -2126,6 +2140,7 @@ export default function App() {
 
   const handleOpenCreateUser = () => {
     setEditingUser(null);
+    setFormUserId(`USR-${Math.floor(1000 + Math.random() * 9000)}`);
     setFormUserName('');
     setFormUserLogin('');
     setFormUserPassword('');
@@ -2137,6 +2152,7 @@ export default function App() {
 
   const handleOpenEditUser = (user: SystemUser) => {
     setEditingUser(user);
+    setFormUserId(user.id);
     setFormUserName(user.name);
     setFormUserLogin(user.username || '');
     setFormUserPassword(user.password || '');
@@ -2177,10 +2193,13 @@ export default function App() {
       return;
     }
 
+    const finalUserId = formUserId.trim() || (editingUser ? editingUser.id : Date.now().toString());
+
     let updatedList: SystemUser[];
     if (editingUser) {
       updatedList = systemUsers.map(u => u.id === editingUser.id ? {
         ...u,
+        id: finalUserId,
         name: formUserName.trim(),
         username: finalLogin,
         password: finalPassword,
@@ -2190,7 +2209,7 @@ export default function App() {
       } : u);
     } else {
       const newUser: SystemUser = {
-        id: Date.now().toString(),
+        id: finalUserId,
         name: formUserName.trim(),
         username: finalLogin,
         password: finalPassword,
@@ -3500,7 +3519,8 @@ export default function App() {
           estatusAcademico: 'Regular'
         })),
         systemUsers: mergedUsers,
-        avisosList: workingAvisos
+        avisosList: workingAvisos,
+        solicitudesCambioList: solicitudesCambioList
       };
 
       const res = await setupSysAcadWorkspace(activeToken, appData, workspaceResult);
@@ -3762,13 +3782,14 @@ export default function App() {
             estatusAcademico: 'Regular'
           })),
           systemUsers: systemUsers,
-          avisosList: avisosList
+          avisosList: avisosList,
+          solicitudesCambioList: solicitudesCambioList
         };
         syncAllDataToSheets(token, workspaceResult.spreadsheetId, appData).catch(e => console.warn('Auto sync warning:', e));
       }, 1500);
       return () => clearTimeout(timeout);
     }
-  }, [alumnosList, materiasList, calificacionesList, avisosList, systemUsers, ciclosList, token, workspaceResult?.spreadsheetId]);
+  }, [alumnosList, materiasList, calificacionesList, avisosList, systemUsers, solicitudesCambioList, ciclosList, token, workspaceResult?.spreadsheetId]);
 
   const handleAdminEmailChange = (newEmail: string) => {
     const trimmed = newEmail.trim();
@@ -4907,6 +4928,20 @@ export default function App() {
                   </div>
 
                   <form onSubmit={handleSaveMateria} className="p-6 space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                        <span>ID / Código de Materia</span>
+                        <span className="text-[10px] text-blue-600 font-normal capitalize">(Manual / Personalizable)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej. MAT-101"
+                        value={formIdMateria}
+                        onChange={(e) => setFormIdMateria(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-blue-50/50 border border-blue-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -5502,6 +5537,20 @@ export default function App() {
                   </div>
 
                   <form onSubmit={handleSaveMaestro} className="p-6 space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                        <span>ID / Clave de Maestro</span>
+                        <span className="text-[10px] text-blue-600 font-normal capitalize">(Manual / Personalizable)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej. MAE-101"
+                        value={formMaestroId}
+                        onChange={(e) => setFormMaestroId(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-blue-50/50 border border-blue-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                         Nombre Completo del Docente
@@ -6615,6 +6664,20 @@ export default function App() {
                       </div>
 
                       <form onSubmit={handleSaveUser} className="p-6 space-y-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                            <span>ID de Usuario (Sistema)</span>
+                            <span className="text-[10px] text-blue-600 font-normal capitalize">(Manual / Personalizable)</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ej. USR-101"
+                            value={formUserId}
+                            onChange={(e) => setFormUserId(e.target.value)}
+                            className="w-full px-3.5 py-2.5 bg-blue-50/50 border border-blue-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                          />
+                        </div>
+
                         <div>
                           <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                             Nombre Completo

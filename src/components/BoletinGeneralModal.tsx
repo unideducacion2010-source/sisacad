@@ -135,6 +135,8 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
   const [filterParcialKardex, setFilterParcialKardex] = useState('Todos');
   const [selectedStudentForKardex, setSelectedStudentForKardex] = useState<string>('all');
   const [kardexViewMode, setKardexViewMode] = useState<'table' | 'preview'>('table');
+  const [kardexPrintFormat, setKardexPrintFormat] = useState<'montessori' | 'sep'>('montessori');
+  const [asesorFeedbackData, setAsesorFeedbackData] = useState<Record<string, Array<{ aspecto: string; estado: string; observaciones: string }>>>({});
 
   // Configuration for "Lista de asistencia"
   const [asistenciaGrado, setAsistenciaGrado] = useState('Todos');
@@ -651,6 +653,327 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
     return `${gradoStr.toUpperCase()} GRADO`;
   };
 
+  // Helper to render official SEP header matching Michoacán format
+  const renderSepHeader = () => (
+    <div className="flex items-center justify-between border-b-2 border-black pb-2.5 mb-3">
+      {/* Left side: EDUCACIÓN & Michoacán Logos */}
+      <div className="flex items-center gap-3">
+        {/* EDUCACIÓN / SEP Logo */}
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 shrink-0 flex items-center justify-center">
+            <svg viewBox="0 0 100 100" className="w-full h-full text-[#9E804E] fill-current">
+              <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="4" />
+              <path d="M50 15 C45 25, 35 30, 35 45 C35 58, 45 68, 50 68 C55 68, 65 58, 65 45 C65 30, 55 25, 50 15 Z" />
+              <path d="M40 70 L60 70 L55 85 L45 85 Z" />
+              <path d="M30 45 C25 40, 20 42, 25 50 C30 55, 35 50, 35 45 Z" />
+              <path d="M70 45 C75 40, 80 42, 75 50 C70 55, 65 50, 65 45 Z" />
+            </svg>
+          </div>
+          <div className="flex flex-col leading-none">
+            <span className="font-serif font-extrabold text-xl text-[#691C32] tracking-tight">EDUCACIÓN</span>
+            <span className="text-[6px] font-bold tracking-tighter uppercase text-[#9E804E] mt-0.5">
+              SECRETARÍA DE EDUCACIÓN PÚBLICA
+            </span>
+          </div>
+        </div>
+
+        {/* Vertical Divider */}
+        <div className="h-8 w-[1.5px] bg-[#9E804E]/60" />
+
+        {/* Michoacán Logo */}
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-9 shrink-0">
+            <svg viewBox="0 0 100 120" className="w-full h-full fill-current text-[#5C234A]">
+              <path d="M10 10 H90 V70 C90 95, 50 115, 50 115 C50 115, 10 95, 10 70 Z" fill="none" stroke="currentColor" strokeWidth="6" />
+              <line x1="50" y1="10" x2="50" y2="110" stroke="currentColor" strokeWidth="4" />
+              <line x1="10" y1="60" x2="90" y2="60" stroke="currentColor" strokeWidth="4" />
+              <path d="M25 10 L35 0 L50 7 L65 0 L75 10 Z" />
+            </svg>
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="font-serif font-extrabold text-[11px] text-[#5C234A]">Secretaría</span>
+            <span className="font-serif font-extrabold text-[11px] text-[#5C234A] -mt-1">de Educación</span>
+            <span className="text-[5.5px] font-bold uppercase tracking-widest text-[#5C234A]/80 mt-0.5">
+              GOBIERNO DE MICHOACÁN
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Right side Text */}
+      <div className="text-right leading-tight">
+        <h2 className="font-sans font-black text-[12.5px] uppercase text-black tracking-wide">
+          SISTEMA EDUCATIVO NACIONAL
+        </h2>
+        <h3 className="font-sans font-black text-[12.5px] uppercase text-black tracking-wide">
+          MICHOACÁN DE OCAMPO
+        </h3>
+        <h1 className="font-sans font-black text-[11.5px] uppercase text-black tracking-widest mt-0.5">
+          BOLETA DE EVALUACIÓN
+        </h1>
+      </div>
+    </div>
+  );
+
+  // Helper to render Villa Montessori Report Card format (Evaluación Temporal)
+  const renderMontessoriCard = (std: any, idx: number, isPrint = false) => {
+    const names = parseStudentName(std);
+    const grades = getStudentSubjectGrades(std);
+
+    let sumT1 = 0, countT1 = 0;
+    let sumT2 = 0, countT2 = 0;
+    let sumT3 = 0, countT3 = 0;
+    let sumFinal = 0, countFinal = 0;
+
+    grades.forEach(g => {
+      const v1 = parseFloat(g.t1 || g.b1);
+      if (!isNaN(v1) && v1 > 0) { sumT1 += v1; countT1++; }
+
+      const v2 = parseFloat(g.t2 || g.b2);
+      if (!isNaN(v2) && v2 > 0) { sumT2 += v2; countT2++; }
+
+      const v3 = parseFloat(g.t3 || g.b3);
+      if (!isNaN(v3) && v3 > 0) { sumT3 += v3; countT3++; }
+
+      const vf = parseFloat(g.final);
+      if (!isNaN(vf) && vf > 0) { sumFinal += vf; countFinal++; }
+    });
+
+    const period1Avg = countT1 > 0 ? (sumT1 / countT1).toFixed(2) : '0.00';
+    const period2Avg = countT2 > 0 ? (sumT2 / countT2).toFixed(2) : '0.00';
+    const period3Avg = countT3 > 0 ? (sumT3 / countT3).toFixed(2) : '0.00';
+    const overallAvg = countFinal > 0 ? (sumFinal / countFinal).toFixed(2) : '0.00';
+
+    const stdKey = std.id || std.curp || `${names.fullName}-${idx}`;
+    const asesorItems = asesorFeedbackData[stdKey] || [
+      {
+        aspecto: 'Cumplimiento de trabajo',
+        estado: 'Intermedio',
+        observaciones: 'En ocasiones necesita apoyo del adulto para entregar en tiempo y forma'
+      },
+      {
+        aspecto: 'Colaboración/ Ayuda a la comunidad',
+        estado: 'Alto',
+        observaciones: 'Es muy colaborativo'
+      },
+      {
+        aspecto: 'Estar donde tiene que estar (Autocontrol)',
+        estado: 'Alto',
+        observaciones: 'Siempre está donde debe de estar'
+      },
+      {
+        aspecto: 'Relación con los demás',
+        estado: 'Alto',
+        observaciones: 'Es un chico educado, disciplinado y con mucho autocontrol'
+      }
+    ];
+
+    const updateAsesorItem = (itemIdx: number, field: 'estado' | 'observaciones', val: string) => {
+      const updated = [...asesorItems];
+      updated[itemIdx] = { ...updated[itemIdx], [field]: val };
+      setAsesorFeedbackData(prev => ({ ...prev, [stdKey]: updated }));
+    };
+
+    return (
+      <div key={stdKey} className={`bg-white p-6 rounded-lg shadow-md border-2 border-[#ca9a2c] max-w-[850px] mx-auto text-black text-xs space-y-4 font-sans ${isPrint ? 'page-break-after-always pb-4' : ''}`}>
+        {/* Top Header */}
+        <div className="flex items-center justify-between border-b-2 border-[#ca9a2c] pb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-amber-50 border-2 border-[#ca9a2c] flex items-center justify-center p-1 text-[#ca9a2c] shrink-0">
+              {institutionLogo ? (
+                <img src={institutionLogo} alt="Logo" className="w-full h-full object-contain rounded-full" />
+              ) : (
+                <svg className="w-9 h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v12M6 12h12" />
+                </svg>
+              )}
+            </div>
+            <div>
+              <h1 className="font-serif font-black text-2xl tracking-wide text-slate-900 leading-none">Villa Montessori</h1>
+              <p className="font-semibold text-xs text-amber-900 tracking-wider">Comunidad Educativa</p>
+              <p className="font-extrabold text-sm text-slate-900 uppercase tracking-wide mt-1">Reporte de Calificaciones</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="inline-block bg-amber-100/80 border border-amber-400 px-3.5 py-1.5 rounded-md text-center">
+              <span className="font-extrabold text-xs text-amber-950 uppercase block tracking-wider">
+                NIVEL {std.grado ? (std.grado.toUpperCase().includes('CHICOS') ? std.grado.toUpperCase() : `${std.grado.toUpperCase()}`) : 'CHICOS'}
+              </span>
+              <span className="text-[10px] font-bold text-amber-900 block">
+                Ciclo {activeCycle.nombre.replace('CICLO ESCOLAR', '').trim()}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Student Info Bar */}
+        <div className="bg-[#fff9db] border border-amber-300 rounded-md p-2.5 flex items-center justify-between text-xs font-bold text-slate-950">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-950 font-extrabold uppercase">ESTUDIANTE:</span>
+            <span className="uppercase text-sm font-mono tracking-tight font-extrabold text-black">
+              {names.fullName || `${std.apellidos || ''}, ${std.nombres || ''}`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-amber-950 font-extrabold uppercase">ASESOR:</span>
+            <span className="uppercase font-bold text-slate-900">{std.tutor || 'Adi'}</span>
+          </div>
+        </div>
+
+        {/* Subject Grades Grid */}
+        <div className="space-y-2">
+          <table className="w-full border-collapse border border-black text-xs text-center">
+            <thead>
+              <tr>
+                <th rowSpan={2} className="border border-black bg-[#ca9a2c] text-black font-extrabold text-left px-3 py-1.5 uppercase text-xs w-[45%]">
+                  ASIGNATURAS / ÁREAS
+                </th>
+                <th colSpan={3} className="border border-black bg-[#ca9a2c] text-black font-extrabold uppercase py-1 text-xs">
+                  PERIODO DE EVALUACIÓN TRIMESTRAL
+                </th>
+                <th rowSpan={2} className="border border-black bg-[#ca9a2c] text-black font-extrabold uppercase py-1 text-xs w-[16%]">
+                  PROMEDIO
+                </th>
+              </tr>
+              <tr className="bg-[#d4af37] text-black font-bold text-[10px]">
+                <th className="border border-black px-1 py-1 w-[13%]">PRIMER</th>
+                <th className="border border-black px-1 py-1 w-[13%]">SEGUNDO</th>
+                <th className="border border-black px-1 py-1 w-[13%]">TERCER</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grades.map((row, rIdx) => (
+                <tr key={rIdx} className="border-b border-black text-xs">
+                  <td className="border border-black px-3 py-1 text-left font-bold uppercase text-slate-900 bg-amber-50/40">
+                    {row.materia}
+                  </td>
+                  <td className="border border-black px-1 py-1 font-mono font-bold text-slate-900 bg-[#fff9db]">
+                    {row.t1 || row.b1 || '0'}
+                  </td>
+                  <td className="border border-black px-1 py-1 font-mono font-bold text-slate-900 bg-[#fff9db]">
+                    {row.t2 || row.b2 || '0'}
+                  </td>
+                  <td className="border border-black px-1 py-1 font-mono font-bold text-slate-900 bg-[#fff9db]">
+                    {row.t3 || row.b3 || '0'}
+                  </td>
+                  <td className="border border-black px-1 py-1 font-mono font-extrabold text-slate-900 bg-[#fce8a6]">
+                    {row.final || '0.00'}
+                  </td>
+                </tr>
+              ))}
+              {/* Summary Row */}
+              <tr className="border-t-2 border-black font-bold text-xs bg-amber-100/90">
+                <td className="border border-black px-3 py-1 text-right uppercase text-slate-950 font-extrabold">
+                  PROMEDIO PERÍODO
+                </td>
+                <td className="border border-black px-1 py-1 font-mono font-extrabold text-slate-950 bg-amber-200/90">
+                  {period1Avg}
+                </td>
+                <td className="border border-black px-1 py-1 font-mono font-extrabold text-slate-950 bg-amber-200/90">
+                  {period2Avg}
+                </td>
+                <td className="border border-black px-1 py-1 font-mono font-extrabold text-slate-950 bg-amber-200/90">
+                  {period3Avg}
+                </td>
+                <td className="border border-black px-1 py-1 font-mono font-extrabold text-slate-950 bg-[#fce8a6]">
+                  —
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Promedio Final Box */}
+          <div className="flex justify-end pt-1">
+            <div className="flex items-center border-2 border-black rounded-sm overflow-hidden text-xs">
+              <span className="bg-[#ca9a2c] text-slate-950 font-extrabold uppercase px-4 py-1.5 border-r border-black tracking-wider">
+                PROMEDIO FINAL
+              </span>
+              <span className="bg-[#fff9db] font-mono font-black text-sm px-6 py-1 text-slate-950">
+                {overallAvg}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Parameters Legend */}
+        <div className="border border-black rounded-sm overflow-hidden text-xs">
+          <div className="bg-[#ca9a2c] text-slate-950 font-extrabold text-center py-1 uppercase tracking-wider text-xs border-b border-black">
+            PARÁMETROS DE EVALUACIÓN
+          </div>
+          <div className="p-2 bg-amber-50/40 text-[10.5px] space-y-1">
+            <div className="flex items-start gap-2">
+              <span className="font-extrabold text-slate-950 w-24 text-right">Alto:</span>
+              <span className="text-slate-900">Fluye de manera positiva</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="font-extrabold text-slate-950 w-24 text-right">Intermedio:</span>
+              <span className="text-slate-900">Aspectos positivos y aspectos que necesitan atención / Dificultad en general</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="font-extrabold text-slate-950 w-24 text-right">Bajo:</span>
+              <span className="text-slate-900">Necesita apoyo continuo / Dificultad constante</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Seguimiento con Asesores */}
+        <div className="space-y-1">
+          <table className="w-full border-collapse border border-black text-xs">
+            <thead>
+              <tr className="bg-[#ca9a2c] text-slate-950 font-extrabold text-left text-xs uppercase">
+                <th className="border border-black px-3 py-1.5 w-[38%]">SEGUIMIENTO CON ASESORES</th>
+                <th className="border border-black px-2 py-1.5 text-center w-[18%]">ESTADO</th>
+                <th className="border border-black px-3 py-1.5 w-[44%]">OBSERVACIONES</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black text-[11px]">
+              {asesorItems.map((item, idx) => (
+                <tr key={idx} className="border-b border-black">
+                  <td className="border border-black px-3 py-1.5 font-semibold text-slate-900 bg-amber-50/30">
+                    {item.aspecto}
+                  </td>
+                  <td className="border border-black px-2 py-1.5 text-center font-bold text-slate-900 bg-[#fff9db]">
+                    {!isPrint ? (
+                      <select
+                        value={item.estado}
+                        onChange={(e) => updateAsesorItem(idx, 'estado', e.target.value)}
+                        className="bg-transparent border-none text-center font-bold cursor-pointer focus:outline-none"
+                      >
+                        <option value="Alto">Alto</option>
+                        <option value="Intermedio">Intermedio</option>
+                        <option value="Bajo">Bajo</option>
+                      </select>
+                    ) : (
+                      item.estado
+                    )}
+                  </td>
+                  <td className="border border-black px-3 py-1.5 text-slate-800 bg-white italic">
+                    {!isPrint ? (
+                      <input
+                        type="text"
+                        value={item.observaciones}
+                        onChange={(e) => updateAsesorItem(idx, 'observaciones', e.target.value)}
+                        className="w-full bg-transparent border-none italic text-xs focus:outline-none focus:bg-amber-50 px-1 rounded"
+                      />
+                    ) : (
+                      item.observaciones
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer Page Number */}
+        <div className="text-center pt-2 text-[10px] font-bold text-slate-500">
+          1 DE 1
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200">
       <div className="bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 w-full max-w-[1300px] max-h-[95vh] flex flex-col overflow-hidden">
@@ -1029,7 +1352,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                     </select>
                   </div>
 
-                  {/* View Switcher: Table vs Boleta Preview */}
+                  {/* View Switcher: Table vs Reporte Villa Montessori vs Boleta SEP Preview */}
                   <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
                     <button
                       onClick={() => setKardexViewMode('table')}
@@ -1040,12 +1363,20 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                       Vista Tabla
                     </button>
                     <button
-                      onClick={() => setKardexViewMode('preview')}
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                        kardexViewMode === 'preview' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                      onClick={() => { setKardexViewMode('preview'); setKardexPrintFormat('montessori'); }}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                        kardexViewMode === 'preview' && kardexPrintFormat === 'montessori' ? 'bg-amber-500 text-slate-950 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      Vista Boleta SEP
+                      <span>📋</span> Reporte Villa Montessori (Temporal)
+                    </button>
+                    <button
+                      onClick={() => { setKardexViewMode('preview'); setKardexPrintFormat('sep'); }}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                        kardexViewMode === 'preview' && kardexPrintFormat === 'sep' ? 'bg-blue-900 text-white font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <span>🎓</span> Boleta SEP (Final de Ciclo)
                     </button>
                   </div>
 
@@ -1178,10 +1509,41 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                 </div>
               )}
 
-              {/* View 2: Screen SEP Boleta Preview */}
+              {/* View 2: Screen Boleta Preview (Montessori vs SEP) */}
               {kardexViewMode === 'preview' && (
-                <div className="bg-slate-300 p-4 rounded-xl overflow-x-auto">
-                  <div className="bg-white p-6 rounded-lg shadow-lg border border-slate-300 max-w-[900px] mx-auto text-black text-xs space-y-3 font-sans">
+                <div className="bg-slate-300 p-4 rounded-xl overflow-x-auto space-y-4">
+                  {/* Format Switcher Header */}
+                  <div className="max-w-[850px] mx-auto bg-slate-900 text-white p-3 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs shadow-md">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-amber-400 uppercase">Formato Activo:</span>
+                      <span className="font-semibold text-slate-200">
+                        {kardexPrintFormat === 'montessori' ? '📋 Reporte de Calificaciones (Villa Montessori / Temporal)' : '🎓 Boleta Oficial de Evaluación (SEP)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setKardexPrintFormat('montessori')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                          kardexPrintFormat === 'montessori' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'bg-slate-800 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        📋 Formato Temporal (Montessori)
+                      </button>
+                      <button
+                        onClick={() => setKardexPrintFormat('sep')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                          kardexPrintFormat === 'sep' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-800 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎓 Formato SEP (Final)
+                      </button>
+                    </div>
+                  </div>
+
+                  {kardexPrintFormat === 'montessori' ? (
+                    kardexStudentsToRender.slice(0, 1).map((std, i) => renderMontessoriCard(std, i, false))
+                  ) : (
+                    <div className="bg-white p-6 rounded-lg shadow-lg border border-slate-300 max-w-[900px] mx-auto text-black text-xs space-y-3 font-sans">
                     {kardexStudentsToRender.slice(0, 1).map((std, i) => {
                       const names = parseStudentName(std);
                       const grades = getStudentSubjectGrades(std);
@@ -1190,36 +1552,8 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
 
                       return (
                         <div key={std.id || i} className="space-y-3">
-                          {/* Top SEP Header */}
-                          <div className="flex items-start justify-between border-b pb-2 border-slate-800">
-                            <div className="w-1/4">
-                              <span className="font-extrabold text-2xl tracking-tighter block leading-none">SEP</span>
-                              <span className="text-[9px] font-bold leading-tight block uppercase text-slate-700 mt-1">
-                                SISTEMA NACIONAL DE ACREDITACION Y CERTIFICACION
-                              </span>
-                            </div>
-                            <div className="w-2/4 text-center leading-tight">
-                              <p className="font-bold text-xs uppercase tracking-wide">SISTEMA EDUCATIVO NACIONAL</p>
-                              <p className="font-bold text-[11px] uppercase">EDUCACION SECUNDARIA</p>
-                              <p className="text-[10px] font-semibold uppercase mt-1">SECRETARIA DE EDUCACION</p>
-                              <p className="text-[8px] text-slate-600 uppercase">SECRETARIA DE EDUCACION U ORGANISMO PUBLICO DESCENTRALIZADO</p>
-                              <p className="font-bold text-[10px] uppercase text-black">CHIAPAS</p>
-                              <p className="text-[8px] text-slate-500 uppercase">ENTIDAD FEDERATIVA</p>
-                            </div>
-                            <div className="w-1/4 flex flex-col items-end">
-                              <div className="flex items-center gap-1 text-[10px] font-bold mb-1">
-                                <span>ZONA:</span>
-                                <span className="border-b border-black font-mono px-2">017</span>
-                              </div>
-                              <div className="border border-black rounded-lg p-1.5 text-center w-full max-w-[190px]">
-                                <span className="font-bold text-[10px] block border-b border-black/30 pb-0.5 uppercase">KARDEX</span>
-                                <span className="font-mono font-bold text-[10px] tracking-wider block mt-0.5">
-                                  {std.curp || 'AAHM980503MCSLRR01'}
-                                </span>
-                                <span className="text-[7px] block uppercase text-slate-600">CLAVE UNICA DE REGISTRO DE POBLACION (CURP)</span>
-                              </div>
-                            </div>
-                          </div>
+                          {/* Official SEP Header matching Michoacán format */}
+                          {renderSepHeader()}
 
                           {/* School Info Box */}
                           <div className="border border-black rounded-lg p-2 text-[10px] space-y-1">
@@ -1410,6 +1744,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                       );
                     })}
                   </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1970,12 +2305,15 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* 2. PRINT KARDEX / BOLETA DE EVALUACION (Exact template from boleta.jpg) */}
+        {/* 2. PRINT KARDEX / BOLETA DE EVALUACION (Montessori vs SEP) */}
         {/* ========================================================================= */}
         {activeTab === 'kardex' && (
           <div>
-            {kardexStudentsToRender.map((std, idx) => {
-              const names = parseStudentName(std);
+            {kardexPrintFormat === 'montessori' ? (
+              kardexStudentsToRender.map((std, idx) => renderMontessoriCard(std, idx, true))
+            ) : (
+              kardexStudentsToRender.map((std, idx) => {
+                const names = parseStudentName(std);
               const grades = getStudentSubjectGrades(std);
               const validFinals = grades.map(g => Number(g.final)).filter(v => !isNaN(v) && v > 0);
               const gAvg = validFinals.length > 0 ? (validFinals.reduce((a, b) => a + b, 0) / validFinals.length).toFixed(1) : (std.promedio || '9.0');
@@ -1983,36 +2321,8 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
 
               return (
                 <div key={std.id || idx} className={`space-y-3 pb-6 ${!isLast ? 'page-break-after-always' : ''}`}>
-                  {/* Top SEP Header */}
-                  <div className="flex items-start justify-between border-b-2 border-black pb-2">
-                    <div className="w-1/4">
-                      <span className="font-extrabold text-3xl tracking-tighter block leading-none text-black">SEP</span>
-                      <span className="text-[8px] font-bold leading-tight block uppercase text-black mt-1">
-                        SISTEMA NACIONAL DE ACREDITACION Y CERTIFICACION
-                      </span>
-                    </div>
-                    <div className="w-2/4 text-center leading-tight">
-                      <p className="font-bold text-xs uppercase tracking-wide text-black">SISTEMA EDUCATIVO NACIONAL</p>
-                      <p className="font-bold text-[11px] uppercase text-black">EDUCACION SECUNDARIA</p>
-                      <p className="text-[10px] font-bold uppercase mt-1 text-black">SECRETARIA DE EDUCACION</p>
-                      <p className="text-[8px] text-black uppercase font-medium">SECRETARIA DE EDUCACION U ORGANISMO PUBLICO DESCENTRALIZADO</p>
-                      <p className="font-bold text-[10px] uppercase text-black">CHIAPAS</p>
-                      <p className="text-[7.5px] text-black uppercase">ENTIDAD FEDERATIVA</p>
-                    </div>
-                    <div className="w-1/4 flex flex-col items-end">
-                      <div className="flex items-center gap-1 text-[10px] font-bold mb-1">
-                        <span>ZONA</span>
-                        <span className="border-b border-black font-mono px-3 font-bold">017</span>
-                      </div>
-                      <div className="border border-black rounded-lg p-1.5 text-center w-full max-w-[190px]">
-                        <span className="font-bold text-[10px] block border-b border-black pb-0.5 uppercase">KARDEX</span>
-                        <span className="font-mono font-bold text-[10px] tracking-wider block mt-0.5 text-black">
-                          {std.curp || 'AAHM980503MCSLRR01'}
-                        </span>
-                        <span className="text-[6.5px] block uppercase text-black font-semibold">CLAVE UNICA DE REGISTRO DE POBLACION (CURP)</span>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Official SEP Header matching Michoacán format */}
+                  {renderSepHeader()}
 
                   {/* School Information Box */}
                   <div className="border border-black rounded-lg p-2 text-[9.5px] space-y-1">
@@ -2240,7 +2550,8 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                   </div>
                 </div>
               );
-            })}
+            })
+          )}
           </div>
         )}
 
