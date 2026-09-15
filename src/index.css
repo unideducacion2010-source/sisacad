@@ -190,13 +190,32 @@
     background: white !important;
     display: block !important;
   }
+
+  /* Specific print optimizations for KPI Reports (Informes) */
+  #informe-print-area {
+    font-size: 82% !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  #informe-print-area .overflow-y-auto,
+  #informe-print-area .overflow-x-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  #informe-print-area select {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    color: inherit !important;
+  }
+
   .page-break-after-always {
     page-break-after: always;
     break-after: page;
   }
   @page {
-    size: auto;
-    margin: 0.6cm 0.8cm;
+    size: letter portrait;
+    margin: 0.5cm 0.6cm;
   }
 }
 

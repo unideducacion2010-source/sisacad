@@ -12,6 +12,7 @@ import { DirectTablePrintModal, TablePrintType } from './components/DirectTableP
 import { PasswordStrengthMeter, evaluatePasswordStrength } from './components/PasswordStrengthMeter';
 import { User } from 'firebase/auth';
 import { encodeSyncPayload, decodeSyncPayload, generateMobileSyncUrl, extractSyncPayloadFromUrl } from './syncBridge';
+import { DEFAULT_VILLA_MONTESSORI_LOGO } from './assets/logo';
 
 import { subscribeToFirebaseStore, saveToFirebaseStore, loadFromFirebaseStore } from './firebase';
 
@@ -901,7 +902,7 @@ export default function App() {
       emailTutor: item.emailTutor || '',
       nivel: item.nivel || 'Primaria',
       grado: item.grado,
-      grupo: item.grupo || 'Grupo A',
+      grupo: item.grupo ? item.grupo.replace(/^grupo\s+/i, '') : 'A',
       turno: item.turno || 'Matutino',
       escuelaProcedencia: item.escuelaProcedencia || '',
       promedioAnterior: item.promedioAnterior || '9.0',
@@ -3276,7 +3277,7 @@ export default function App() {
   });
   const [savedInstitutionNameMsg, setSavedInstitutionNameMsg] = useState(false);
   const [institutionLogo, setInstitutionLogo] = useState<string>(() => {
-    return localStorage.getItem('sysacad_institution_logo') || '';
+    return localStorage.getItem('sysacad_institution_logo') || DEFAULT_VILLA_MONTESSORI_LOGO;
   });
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3888,6 +3889,7 @@ export default function App() {
               onSave={handleSaveStudent}
               initialData={editingAlumnoData}
               institutionName={institutionName || 'VILLA MONTESSORI DE MORELIA'}
+              institutionLogo={institutionLogo}
               cicloEscolar="CICLO ESCOLAR 2026-2027"
             />
           </div>
@@ -3994,7 +3996,7 @@ export default function App() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="text-slate-700 font-medium">{item.grado}</div>
-                        <div className="text-[11px] text-slate-400">{item.nivel || 'Primaria'} • {item.grupo || 'Grupo A'} ({item.turno || 'Matutino'})</div>
+                        <div className="text-[11px] text-slate-400">{item.nivel || 'Primaria'} • {(item.grupo || 'A').replace(/^grupo\s+/i, '')} ({item.turno || 'Matutino'})</div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="text-slate-600 text-xs">{item.email}</div>
@@ -4045,6 +4047,7 @@ export default function App() {
               onSave={handleSaveStudent}
               initialData={editingAlumnoData}
               institutionName={institutionName || 'VILLA MONTESSORI DE MORELIA'}
+              institutionLogo={institutionLogo}
               cicloEscolar="CICLO ESCOLAR 2026-2027"
             />
           </div>

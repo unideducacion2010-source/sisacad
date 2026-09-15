@@ -16,6 +16,7 @@ import {
   FileText
 } from 'lucide-react';
 import { resolveDriveFolderLink } from '../driveLinks';
+import { DEFAULT_VILLA_MONTESSORI_LOGO } from '../assets/logo';
 
 export interface AlumnoItem {
   id: string;
@@ -112,6 +113,8 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
   playClickSound,
   playSuccessSound
 }) => {
+  const effectiveLogo = institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO;
+
   // 3 Primary Options
   const [activeTab, setActiveTab] = useState<'alumnos' | 'kardex' | 'asistencia'>('alumnos');
 
@@ -780,14 +783,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
         <div className="flex items-center justify-between border-b-2 border-[#ca9a2c] pb-3">
           <div className="flex items-center gap-3">
             <div className="w-14 h-14 rounded-full bg-amber-50 border-2 border-[#ca9a2c] flex items-center justify-center p-1 text-[#ca9a2c] shrink-0">
-              {institutionLogo ? (
-                <img src={institutionLogo} alt="Logo" className="w-full h-full object-contain rounded-full" />
-              ) : (
-                <svg className="w-9 h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v12M6 12h12" />
-                </svg>
-              )}
+              <img src={effectiveLogo} alt="Logo" className="w-full h-full object-contain rounded-full" />
             </div>
             <div>
               <h1 className="font-serif font-black text-2xl tracking-wide text-slate-900 leading-none">Villa Montessori</h1>
@@ -1083,17 +1079,11 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
               {/* Institution Header Banner */}
               <div className="bg-[#0f3458] text-white rounded-xl shadow-md border border-[#0b2844] p-4 lg:p-5 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
-                  {institutionLogo ? (
-                    <img 
-                      src={institutionLogo} 
-                      alt="Logo Escuela" 
-                      className="w-13 h-13 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-700 flex items-center justify-center text-white shadow-md">
-                      <School size={24} />
-                    </div>
-                  )}
+                  <img 
+                    src={effectiveLogo} 
+                    alt="Logo Escuela" 
+                    className="w-13 h-13 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40 shrink-0"
+                  />
                   <div>
                     <h2 className="text-base sm:text-lg font-extrabold tracking-wide uppercase text-white">
                       {institutionName || 'ESCUELA SECUNDARIA GENERAL Nº3'}
@@ -1169,7 +1159,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                     >
                       <option value="Todos">Todos</option>
                       {uniqueGrupos.map(g => (
-                        <option key={g} value={g}>Grupo {g}</option>
+                        <option key={g} value={g}>{g.replace(/^grupo\s+/i, '')}</option>
                       ))}
                     </select>
                   </div>
@@ -1287,17 +1277,11 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
               {/* Institution Header Banner */}
               <div className="bg-[#0f3458] text-white rounded-xl shadow-md border border-[#0b2844] p-4 lg:p-5 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
-                  {institutionLogo ? (
-                    <img 
-                      src={institutionLogo} 
-                      alt="Logo Escuela" 
-                      className="w-13 h-13 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-md">
-                      <GraduationCap size={24} />
-                    </div>
-                  )}
+                  <img 
+                    src={effectiveLogo} 
+                    alt="Logo Escuela" 
+                    className="w-13 h-13 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40 shrink-0"
+                  />
                   <div>
                     <h2 className="text-base sm:text-lg font-extrabold tracking-wide uppercase text-white">
                       {institutionName || 'ESCUELA SECUNDARIA GENERAL Nº3'}
@@ -1739,6 +1723,19 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                                 </span>
                               </div>
                             </div>
+
+                            {/* SIGNATURES */}
+                            <div className="grid grid-cols-3 gap-4 text-center pt-4 border-t border-black/20 mt-2 text-[8px] text-black">
+                              <div>
+                                <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA DEL MAESTRO(A)</div>
+                              </div>
+                              <div>
+                                <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA DEL DIRECTOR(A)</div>
+                              </div>
+                              <div>
+                                <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA PADRE / TUTOR</div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1758,17 +1755,11 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
               {/* Institution Header Banner */}
               <div className="bg-[#0f3458] text-white rounded-xl shadow-md border border-[#0b2844] p-4 lg:p-5 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
-                  {institutionLogo ? (
-                    <img 
-                      src={institutionLogo} 
-                      alt="Logo Escuela" 
-                      className="w-13 h-13 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white shadow-md">
-                      <ClipboardList size={24} />
-                    </div>
-                  )}
+                  <img 
+                    src={effectiveLogo} 
+                    alt="Logo Escuela" 
+                    className="w-13 h-13 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40 shrink-0"
+                  />
                   <div>
                     <h2 className="text-base sm:text-lg font-extrabold tracking-wide uppercase text-white">
                       {institutionName || 'ESCUELA SOR JUANA'}
@@ -1829,7 +1820,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                     >
                       <option value="Todos">Todos</option>
                       {uniqueGrupos.map(g => (
-                        <option key={g} value={g}>Grupo {g}</option>
+                        <option key={g} value={g}>{g.replace(/^grupo\s+/i, '')}</option>
                       ))}
                     </select>
                   </div>
@@ -2140,7 +2131,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                           </div>
                           <div>
                             <div className="border-t border-black w-4/5 mx-auto pt-1">
-                              <p className="text-[9px] font-bold uppercase text-black">FECHA DE ENTREGA</p>
+                              <p className="text-[9px] font-bold uppercase text-black">NOMBRE Y FIRMA DEL DIRECTOR(A)</p>
                             </div>
                           </div>
                         </div>
@@ -2249,19 +2240,23 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
         {/* ========================================================================= */}
         {activeTab === 'alumnos' && (
           <div>
-            <div className="text-center mb-5 pt-1">
-              <h1 className="font-bold text-base uppercase tracking-wider text-black leading-tight">
-                {institutionName ? institutionName.toUpperCase() : 'ESCUELA SECUNDARIA GENERAL Nº3'}
-              </h1>
-              <h2 className="font-bold text-sm uppercase tracking-wide text-black mt-0.5 leading-tight">
-                PROFR. RAFAEL BALANDRANO BALANDRANO
-              </h2>
-              <p className="font-bold text-sm uppercase text-black mt-1 leading-tight">
-                {cicloTextClean}
-              </p>
-              <p className="font-bold text-sm uppercase text-black mt-0.5 leading-tight">
-                GRADO {printGradoText} GRUPO {printGrupoText}
-              </p>
+            <div className="flex items-center justify-center gap-4 mb-5 pt-1 border-b border-black/20 pb-3">
+              <img 
+                src={effectiveLogo} 
+                alt="Logo" 
+                className="w-14 h-14 object-contain shrink-0" 
+              />
+              <div className="text-center">
+                <h1 className="font-bold text-base uppercase tracking-wider text-black leading-tight">
+                  {institutionName ? institutionName.toUpperCase() : 'CENTRO EDUCATIVO VILLA MONTESSORI'}
+                </h1>
+                <p className="font-bold text-sm uppercase text-black mt-1 leading-tight">
+                  {cicloTextClean}
+                </p>
+                <p className="font-bold text-sm uppercase text-black mt-0.5 leading-tight">
+                  GRADO {printGradoText} GRUPO {printGrupoText.replace(/^grupo\s+/i, '')}
+                </p>
+              </div>
             </div>
 
             <table className="w-full border-collapse border border-black text-xs text-black">
@@ -2547,6 +2542,19 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                         </span>
                       </div>
                     </div>
+
+                    {/* SIGNATURES */}
+                    <div className="grid grid-cols-3 gap-4 text-center pt-3 border-t border-black/20 mt-2 text-[7.5px] text-black">
+                      <div>
+                        <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA DEL MAESTRO(A)</div>
+                      </div>
+                      <div>
+                        <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA DEL DIRECTOR(A)</div>
+                      </div>
+                      <div>
+                        <div className="border-t border-black w-4/5 mx-auto pt-0.5 font-bold uppercase">FIRMA PADRE / TUTOR</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -2561,13 +2569,22 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
         {activeTab === 'asistencia' && (
           <div className="w-full text-black bg-white font-sans text-xs">
             {/* TITLE */}
-            <div className="text-center mb-2">
-              <h1 className="text-2xl font-black tracking-wide uppercase text-black leading-tight">
-                LISTA DE ASISTENCIA
-              </h1>
-              <h2 className="text-lg font-black tracking-wide uppercase text-black leading-tight">
-                {asistenciaMes.toUpperCase()} {asistenciaYear}
-              </h2>
+            <div className="flex items-center justify-between mb-3 border-b border-black pb-2">
+              <div className="flex items-center gap-3">
+                <img 
+                  src={effectiveLogo} 
+                  alt="Logo" 
+                  className="w-12 h-12 object-contain shrink-0" 
+                />
+                <div>
+                  <h1 className="text-xl font-black tracking-wide uppercase text-black leading-tight">
+                    LISTA DE ASISTENCIA — {institutionName ? institutionName.toUpperCase() : 'CENTRO EDUCATIVO VILLA MONTESSORI'}
+                  </h1>
+                  <h2 className="text-sm font-bold tracking-wide uppercase text-black leading-tight">
+                    {asistenciaMes.toUpperCase()} {asistenciaYear}
+                  </h2>
+                </div>
+              </div>
             </div>
 
             {/* TOP INFO BOX */}
@@ -2782,7 +2799,7 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
                   </div>
                   <div>
                     <div className="border-t border-black w-4/5 mx-auto pt-1">
-                      <p className="text-[8.5px] font-bold uppercase text-black">FECHA DE ENTREGA</p>
+                      <p className="text-[8.5px] font-bold uppercase text-black">NOMBRE Y FIRMA DEL DIRECTOR(A)</p>
                     </div>
                   </div>
                 </div>

@@ -20,6 +20,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DEFAULT_VILLA_MONTESSORI_LOGO } from '../assets/logo';
 
 export interface StudentFormData {
   id?: string;
@@ -89,6 +90,7 @@ interface StudentEnrollmentModalProps {
   onSave: (data: StudentFormData) => boolean | void;
   initialData?: StudentFormData | null;
   institutionName?: string;
+  institutionLogo?: string;
   cicloEscolar?: string;
 }
 
@@ -98,6 +100,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
   onSave,
   initialData,
   institutionName = 'VILLA MONTESSORI DE MORELIA',
+  institutionLogo,
   cicloEscolar = 'CICLO ESCOLAR 2026-2027'
 }) => {
   const [formData, setFormData] = useState<StudentFormData>({
@@ -128,7 +131,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
     emailTutor: '',
     nivel: 'Primaria',
     grado: '1er Grado',
-    grupo: 'Grupo A',
+    grupo: 'A',
     turno: 'Matutino',
     escuelaProcedencia: '',
     promedioAnterior: '9.0',
@@ -174,7 +177,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
         estado: initialData.estado || 'Michoacán',
         nivel: initialData.nivel || 'Primaria',
         grado: initialData.grado || '1er Grado',
-        grupo: initialData.grupo || 'Grupo A',
+        grupo: initialData.grupo ? initialData.grupo.replace(/^grupo\s+/i, '') : 'A',
         turno: initialData.turno || 'Matutino'
       });
     } else {
@@ -208,7 +211,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
         emailTutor: '',
         nivel: 'Primaria',
         grado: '1er Grado',
-        grupo: 'Grupo A',
+        grupo: 'A',
         turno: 'Matutino',
         escuelaProcedencia: '',
         promedioAnterior: '9.0',
@@ -924,9 +927,10 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
                                 onChange={(e) => handleInputChange('grupo', e.target.value)}
                                 className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm"
                               >
-                                <option value="Grupo A">Grupo A</option>
-                                <option value="Grupo B">Grupo B</option>
-                                <option value="Grupo C">Grupo C</option>
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                                <option value="C">C</option>
+                                <option value="D">D</option>
                                 <option value="Único">Único</option>
                               </select>
                             </div>
@@ -1312,9 +1316,11 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
                 {/* Header */}
                 <div className="flex items-center justify-between border-b-2 border-slate-800 pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-sky-700 text-white flex items-center justify-center font-bold text-xl">
-                      SA
-                    </div>
+                    <img 
+                      src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                      alt="Logo" 
+                      className="w-12 h-12 object-contain shrink-0" 
+                    />
                     <div>
                       <h2 className="text-lg font-bold text-slate-900 uppercase">{institutionName}</h2>
                       <p className="text-xs text-slate-600 font-semibold">CÉDULA OFICIAL DE INSCRIPCIÓN / REINSCRIPCIÓN</p>

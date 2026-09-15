@@ -16,6 +16,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { resolveDriveFolderLink } from '../driveLinks';
+import { DEFAULT_VILLA_MONTESSORI_LOGO } from '../assets/logo';
 
 export type TablePrintType = 'alumnos' | 'maestros' | 'materias' | 'calificaciones';
 
@@ -137,7 +138,7 @@ export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
         a.matricula || a.id || `ALU-${idx + 1}`,
         a.nombres || '',
         a.apellidos || `${a.apellidoPaterno || ''} ${a.apellidoMaterno || ''}`.trim(),
-        `${a.grado || ''} ${a.grupo ? '• Grupo ' + a.grupo : ''}`.trim(),
+        `${a.grado || ''} ${a.grupo ? a.grupo.replace(/^grupo\s+/i, '') : 'A'}`.trim(),
         a.nivel || 'Primaria',
         a.email || '',
         a.estatus || 'Activo',
@@ -326,13 +327,12 @@ export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
             {/* Header matching institutional standards */}
             <div className="border-b-2 border-slate-800 pb-3 mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                {institutionLogo ? (
-                  <img src={institutionLogo} alt="Logo" className="w-12 h-12 object-contain" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-11 h-11 bg-slate-900 text-white rounded-lg flex items-center justify-center font-bold text-lg">
-                    {institutionName ? institutionName.charAt(0) : 'E'}
-                  </div>
-                )}
+                <img 
+                  src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                  alt="Logo" 
+                  className="w-12 h-12 object-contain shrink-0" 
+                  referrerPolicy="no-referrer" 
+                />
                 <div>
                   <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase">
                     {institutionName || 'SISTEMA EDUCATIVO'}
@@ -389,7 +389,7 @@ export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
                             {item.apellidos || `${item.apellidoPaterno || ''} ${item.apellidoMaterno || ''}`.trim() || '—'}
                           </td>
                           <td className="border border-slate-300 py-1.5 px-2 text-slate-700">
-                            {item.grado || '1°'} {item.grupo ? `• Grupo ${item.grupo}` : ''}
+                            {item.grado || '1°'} {item.grupo ? item.grupo.replace(/^grupo\s+/i, '') : 'A'}
                           </td>
                           <td className="border border-slate-300 py-1.5 px-2 text-slate-700">
                             {item.nivel || 'Primaria'}
@@ -540,7 +540,7 @@ export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
             </div>
 
             {/* Footer and Signatures */}
-            <div className="mt-8 pt-4 border-t border-slate-300 grid grid-cols-2 sm:grid-cols-3 gap-6 text-[10px] text-slate-600">
+            <div className="mt-8 pt-4 border-t border-slate-300 grid grid-cols-2 gap-8 text-[10px] text-slate-600">
               <div className="text-center">
                 <div className="border-b border-slate-400 pb-8 mb-1"></div>
                 <p className="font-bold text-slate-800">Control Escolar</p>
@@ -550,11 +550,6 @@ export const DirectTablePrintModal: React.FC<DirectTablePrintModalProps> = ({
                 <div className="border-b border-slate-400 pb-8 mb-1"></div>
                 <p className="font-bold text-slate-800">Dirección Académica</p>
                 <p className="text-[9px] text-slate-500">Sello y Firma Oficial</p>
-              </div>
-              <div className="text-center col-span-2 sm:col-span-1">
-                <div className="border-b border-slate-400 pb-8 mb-1"></div>
-                <p className="font-bold text-slate-800">Fecha y Hora</p>
-                <p className="text-[9px] text-slate-500">{new Date().toLocaleString('es-MX')}</p>
               </div>
             </div>
 

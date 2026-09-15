@@ -20,6 +20,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { resolveDriveFolderLink } from '../driveLinks';
+import { DEFAULT_VILLA_MONTESSORI_LOGO } from '../assets/logo';
 
 interface CicloEscolarItem {
   id: string;
@@ -337,50 +338,44 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
         </div>
 
         {/* Scrollable Modal Content Area */}
-        <div id="informe-print-area" className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-slate-200/60 print:bg-white print:p-2 print:overflow-visible">
+        <div id="informe-print-area" className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-slate-200/60 print:bg-white print:p-0 print:m-0 print:overflow-visible print:space-y-2">
 
           {/* ========================================================================= */}
           {/* TAB 1: INFORMES CICLO ESCOLAR (DESIGN REPLICA OF THE UPLOADED REFERENCE) */}
           {/* ========================================================================= */}
           {activeTab === 'ciclo' && (
-            <div className="space-y-3">
+            <div className="space-y-3 print:space-y-1.5">
               {/* 1. TOP NAVY BANNER WITH LOGO, INSTITUTION NAME & TOP 6 KPIS */}
-              <div className="bg-[#0f3458] text-white rounded-xl shadow-md border border-[#0b2844] p-4 lg:p-5 flex flex-col lg:flex-row items-center justify-between gap-4">
+              <div className="bg-[#0f3458] text-white rounded-xl shadow-md border border-[#0b2844] p-4 lg:p-5 flex flex-col lg:flex-row items-center justify-between gap-4 print:p-2.5 print:rounded-lg print:flex-row print:gap-2">
                 {/* Brand / Logo + Institution Name */}
-                <div className="flex items-center gap-3.5 min-w-[240px]">
-                  {institutionLogo ? (
-                    <img 
-                      src={institutionLogo} 
-                      alt="Logo Escuela" 
-                      className="w-14 h-14 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40"
-                    />
-                  ) : (
-                    <div className="w-13 h-13 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-900 shadow-md border border-amber-300/50">
-                      <School size={28} className="text-white" />
-                    </div>
-                  )}
+                <div className="flex items-center gap-3.5 min-w-[240px] print:min-w-0 print:gap-2">
+                  <img 
+                    src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                    alt="Logo Escuela" 
+                    className="w-14 h-14 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40 print:w-9 print:h-9 print:p-0.5 shrink-0"
+                  />
                   <div>
-                    <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#ffc107] uppercase leading-none drop-shadow-xs font-serif">
+                    <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#ffc107] uppercase leading-none drop-shadow-xs font-serif print:text-base">
                       {institutionName || 'UNIDAD EDUCATIVA'}
                     </h1>
-                    <p className="text-[11px] font-semibold text-slate-300 uppercase tracking-widest mt-1">
+                    <p className="text-[11px] font-semibold text-slate-300 uppercase tracking-widest mt-1 print:text-[8px] print:mt-0.5">
                       Módulo de Control Escolar y Rendimiento
                     </p>
                   </div>
                 </div>
 
                 {/* KPI Metrics inside the Banner */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 w-full lg:w-auto text-center divide-y sm:divide-y-0 sm:divide-x divide-slate-600/50">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 w-full lg:w-auto text-center divide-y sm:divide-y-0 sm:divide-x divide-slate-600/50 print:grid-cols-6 print:gap-1 print:divide-x print:divide-y-0 print:w-auto">
                   {/* Año Lectivo Selector */}
-                  <div className="px-2 pt-2 sm:pt-0">
-                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-1">
+                  <div className="px-2 pt-2 sm:pt-0 print:px-1">
+                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-1 print:text-[8px] print:mb-0">
                       Año Lectivo
                     </span>
                     <div className="relative inline-block">
                       <select
                         value={selectedCycleName}
                         onChange={(e) => setSelectedCycleName(e.target.value)}
-                        className="bg-[#0b2844] text-white text-xs font-bold px-2.5 py-1.5 rounded border border-slate-500 focus:outline-none focus:border-amber-400 appearance-none pr-6 cursor-pointer"
+                        className="bg-[#0b2844] text-white text-xs font-bold px-2.5 py-1.5 rounded border border-slate-500 focus:outline-none focus:border-amber-400 appearance-none pr-6 cursor-pointer print:border-none print:px-1 print:py-0 print:text-[10px]"
                       >
                         {ciclosList.map(c => (
                           <option key={c.id} value={c.nombre} className="bg-slate-900 text-white">
@@ -391,56 +386,56 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
                           <option value="2026-2027">2026-2027</option>
                         )}
                       </select>
-                      <ChevronDown size={13} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                      <ChevronDown size={13} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none print:hidden" />
                     </div>
                   </div>
 
                   {/* Total de Estudiantes */}
-                  <div className="px-2 pt-2 sm:pt-0">
-                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5">
+                  <div className="px-2 pt-2 sm:pt-0 print:px-1">
+                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5 print:text-[8px]">
                       Total de Estudiantes
                     </span>
-                    <span className="text-2xl font-bold text-white tracking-tight">
+                    <span className="text-2xl font-bold text-white tracking-tight print:text-sm">
                       {totalStudents}
                     </span>
                   </div>
 
                   {/* Incremento Estudiantes */}
-                  <div className="px-2 pt-2 sm:pt-0">
-                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5">
+                  <div className="px-2 pt-2 sm:pt-0 print:px-1">
+                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5 print:text-[8px]">
                       Incremento Estudiantes
                     </span>
-                    <span className="text-2xl font-bold text-white tracking-tight">
+                    <span className="text-2xl font-bold text-white tracking-tight print:text-sm">
                       5.21%
                     </span>
                   </div>
 
                   {/* Promedio Est. Por Paralelo */}
-                  <div className="px-2 pt-2 sm:pt-0">
-                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5">
+                  <div className="px-2 pt-2 sm:pt-0 print:px-1">
+                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5 print:text-[8px]">
                       Promedio Est. Por Paralelo
                     </span>
-                    <span className="text-2xl font-bold text-white tracking-tight">
+                    <span className="text-2xl font-bold text-white tracking-tight print:text-sm">
                       21
                     </span>
                   </div>
 
                   {/* Capacidad Infraestructura */}
-                  <div className="px-2 pt-2 sm:pt-0">
-                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5">
+                  <div className="px-2 pt-2 sm:pt-0 print:px-1">
+                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5 print:text-[8px]">
                       Capacidad Infraestructura
                     </span>
-                    <span className="text-2xl font-bold text-white tracking-tight">
+                    <span className="text-2xl font-bold text-white tracking-tight print:text-sm">
                       82%
                     </span>
                   </div>
 
                   {/* Fecha Actual */}
-                  <div className="px-2 pt-2 sm:pt-0">
-                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5">
+                  <div className="px-2 pt-2 sm:pt-0 print:px-1">
+                    <span className="block text-[11px] sm:text-xs font-bold text-[#ffc107] uppercase tracking-wider mb-0.5 print:text-[8px]">
                       Fecha Actual
                     </span>
-                    <span className="text-sm sm:text-base font-bold text-white tracking-tight mt-1 block">
+                    <span className="text-sm sm:text-base font-bold text-white tracking-tight mt-1 block print:text-[10px] print:mt-0">
                       {currentDateFormatted}
                     </span>
                   </div>
@@ -448,140 +443,140 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
               </div>
 
               {/* 2. SECONDARY METRIC RIBBON (WHITE CARD WITH EXACT CARDS & ICONS) */}
-              <div className="bg-white rounded-xl shadow-xs border border-slate-300 p-3 sm:p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3 text-center divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
+              <div className="bg-white rounded-xl shadow-xs border border-slate-300 p-3 sm:p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3 text-center divide-y sm:divide-y-0 sm:divide-x divide-slate-200 print:p-1.5 print:rounded-lg print:grid-cols-7 print:gap-1 print:divide-x print:divide-y-0">
                 {/* Graduados Año Pasado */}
-                <div className="px-2 flex flex-col justify-center items-center">
-                  <span className="text-xs font-bold text-slate-700 leading-tight">
+                <div className="px-2 flex flex-col justify-center items-center print:px-0.5">
+                  <span className="text-xs font-bold text-slate-700 leading-tight print:text-[8px]">
                     Graduados Año Pasado
                   </span>
-                  <span className="text-2xl font-bold text-slate-900 mt-1">
+                  <span className="text-2xl font-bold text-slate-900 mt-1 print:text-sm print:mt-0">
                     47
                   </span>
                 </div>
 
                 {/* Total Actual Docentes */}
-                <div className="px-2 flex flex-col justify-center items-center">
-                  <span className="text-xs font-bold text-slate-700 leading-tight">
+                <div className="px-2 flex flex-col justify-center items-center print:px-0.5">
+                  <span className="text-xs font-bold text-slate-700 leading-tight print:text-[8px]">
                     Total Actual Docentes
                   </span>
-                  <div className="flex items-center justify-center gap-2 mt-1">
-                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs border border-amber-200">
+                  <div className="flex items-center justify-center gap-2 mt-1 print:gap-1 print:mt-0">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs border border-amber-200 print:w-4 print:h-4 print:text-[8px]">
                       👩‍🏫
                     </div>
-                    <span className="text-2xl font-bold text-slate-900">
+                    <span className="text-2xl font-bold text-slate-900 print:text-sm">
                       {totalTeachers}
                     </span>
                   </div>
                 </div>
 
                 {/* Total Días Clases */}
-                <div className="px-2 flex flex-col justify-center items-center">
-                  <span className="text-xs font-bold text-slate-700 leading-tight">
+                <div className="px-2 flex flex-col justify-center items-center print:px-0.5">
+                  <span className="text-xs font-bold text-slate-700 leading-tight print:text-[8px]">
                     Total Días Clases
                   </span>
-                  <span className="text-2xl font-bold text-slate-900 mt-1">
+                  <span className="text-2xl font-bold text-slate-900 mt-1 print:text-sm print:mt-0">
                     211
                   </span>
                 </div>
 
                 {/* Total Días Asistidos */}
-                <div className="px-2 flex flex-col justify-center items-center">
-                  <span className="text-xs font-bold text-slate-700 leading-tight">
+                <div className="px-2 flex flex-col justify-center items-center print:px-0.5">
+                  <span className="text-xs font-bold text-slate-700 leading-tight print:text-[8px]">
                     Total Días Asistidos
                   </span>
-                  <div className="flex items-center justify-center gap-2 mt-1">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs border border-blue-200">
+                  <div className="flex items-center justify-center gap-2 mt-1 print:gap-1 print:mt-0">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs border border-blue-200 print:w-4 print:h-4 print:text-[8px]">
                       📝
                     </div>
-                    <span className="text-2xl font-bold text-slate-900">
+                    <span className="text-2xl font-bold text-slate-900 print:text-sm">
                       120
                     </span>
                   </div>
                 </div>
 
                 {/* Pagos Atrasados Mes */}
-                <div className="px-2 flex flex-col justify-center items-center">
-                  <span className="text-xs font-bold text-slate-700 leading-tight">
+                <div className="px-2 flex flex-col justify-center items-center print:px-0.5">
+                  <span className="text-xs font-bold text-slate-700 leading-tight print:text-[8px]">
                     Pagos Atrasados Mes
                   </span>
-                  <span className="text-2xl font-bold text-slate-900 mt-1">
+                  <span className="text-2xl font-bold text-slate-900 mt-1 print:text-sm print:mt-0">
                     56
                   </span>
                 </div>
 
                 {/* Pagos/Deuda Acumulada */}
-                <div className="px-2 flex flex-col justify-center items-center">
-                  <span className="text-xs font-bold text-slate-700 leading-tight">
+                <div className="px-2 flex flex-col justify-center items-center print:px-0.5">
+                  <span className="text-xs font-bold text-slate-700 leading-tight print:text-[8px]">
                     Pagos/Deuda Acumulada
                   </span>
-                  <div className="flex items-center justify-center gap-2 mt-1">
-                    <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-700 font-bold text-xs border border-rose-200">
+                  <div className="flex items-center justify-center gap-2 mt-1 print:gap-1 print:mt-0">
+                    <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-700 font-bold text-xs border border-rose-200 print:w-4 print:h-4 print:text-[8px]">
                       🧾
                     </div>
-                    <span className="text-2xl font-bold text-slate-900">
+                    <span className="text-2xl font-bold text-slate-900 print:text-sm">
                       85
                     </span>
                   </div>
                 </div>
 
                 {/* Monto Total Adeudado */}
-                <div className="px-2 flex flex-col justify-center items-center">
-                  <span className="text-xs font-bold text-slate-700 leading-tight">
+                <div className="px-2 flex flex-col justify-center items-center print:px-0.5">
+                  <span className="text-xs font-bold text-slate-700 leading-tight print:text-[8px]">
                     Monto Total Adeudado
                   </span>
-                  <span className="text-2xl font-bold text-slate-900 mt-1">
+                  <span className="text-2xl font-bold text-slate-900 mt-1 print:text-sm print:mt-0">
                     $19.525
                   </span>
                 </div>
               </div>
 
               {/* 3. MAIN DASHBOARD CONTENT (ASISTENCIAS + GÉNERO + TABLA MATRICIAL DE NIVELES) */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 print:grid-cols-12 print:gap-2">
                 {/* Left Column: Asistencias y Ausencias Bar Chart + Donut de Género */}
-                <div className="lg:col-span-7 bg-white rounded-xl shadow-xs border border-slate-300 p-4 flex flex-col justify-between">
+                <div className="lg:col-span-7 print:col-span-7 bg-white rounded-xl shadow-xs border border-slate-300 p-4 print:p-2.5 print:rounded-lg flex flex-col justify-between">
                   <div>
                     {/* Header with Legend */}
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-3 print:pb-1 print:mb-1.5">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2 print:text-[9px]">
                         <span>Asistencias y Ausencias por Mes</span>
                       </h3>
-                      <div className="flex items-center gap-3 text-xs font-bold">
+                      <div className="flex items-center gap-3 text-xs font-bold print:gap-2 print:text-[8px]">
                         <span className="flex items-center gap-1 text-[#0f3458]">
-                          <span className="w-3 h-3 rounded-xs bg-[#0f3458] inline-block"></span>
+                          <span className="w-3 h-3 print:w-2 print:h-2 rounded-xs bg-[#0f3458] inline-block"></span>
                           Asistencias
                         </span>
                         <span className="flex items-center gap-1 text-[#eab308]">
-                          <span className="w-3 h-3 rounded-xs bg-[#eab308] inline-block"></span>
+                          <span className="w-3 h-3 print:w-2 print:h-2 rounded-xs bg-[#eab308] inline-block"></span>
                           Ausencias
                         </span>
                       </div>
                     </div>
 
                     {/* Bar Chart Bars with exact percentages */}
-                    <div className="grid grid-cols-6 gap-2 sm:gap-3 items-end h-44 pt-4 px-2">
+                    <div className="grid grid-cols-6 gap-2 sm:gap-3 items-end h-44 pt-4 px-2 print:h-20 print:pt-1 print:px-0 print:gap-1">
                       {attendanceMonthly.map((m, idx) => (
                         <div key={idx} className="flex flex-col items-center h-full justify-end group">
                           {/* Percent Pill */}
-                          <span className="text-[10px] font-extrabold text-white bg-slate-800 px-1 py-0.5 rounded shadow-xs mb-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                          <span className="text-[10px] font-extrabold text-white bg-slate-800 px-1 py-0.5 rounded shadow-xs mb-1 opacity-90 group-hover:opacity-100 transition-opacity print:text-[7px] print:px-0.5 print:py-0 print:mb-0.5">
                             {m.asistencias.toFixed(2)}%
                           </span>
                           
                           {/* Stacked Bar container */}
-                          <div className="w-full max-w-[46px] bg-[#0f3458] rounded-t-sm relative overflow-hidden flex flex-col justify-between transition-all duration-300 group-hover:brightness-110" style={{ height: `${m.asistencias * 1.3}px` }}>
+                          <div className="w-full max-w-[46px] bg-[#0f3458] rounded-t-sm relative overflow-hidden flex flex-col justify-between transition-all duration-300 group-hover:brightness-110 print:max-w-[28px]" style={{ height: `${m.asistencias * 0.7}px` }}>
                             {/* Ausencias Top Cap */}
                             <div 
                               className="w-full bg-[#eab308]" 
-                              style={{ height: `${Math.max(4, m.ausencias * 2)}px` }}
+                              style={{ height: `${Math.max(2, m.ausencias * 1.2)}px` }}
                               title={`Ausencias: ${m.ausencias.toFixed(2)}%`}
                             ></div>
                             {/* Inner Value Text */}
-                            <div className="text-[9px] font-bold text-white text-center pb-2 tracking-tighter">
+                            <div className="text-[9px] font-bold text-white text-center pb-2 tracking-tighter print:text-[6.5px] print:pb-0.5">
                               {m.asistencias.toFixed(2)}%
                             </div>
                           </div>
 
                           {/* Month Label */}
-                          <span className="text-[10px] font-bold text-slate-700 mt-1 uppercase">
+                          <span className="text-[10px] font-bold text-slate-700 mt-1 uppercase print:text-[7.5px] print:mt-0.5">
                             {m.mes}
                           </span>
                         </div>
@@ -590,10 +585,10 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
                   </div>
 
                   {/* Donut Chart Género (MASCULINO vs FEMENINO) */}
-                  <div className="border-t border-slate-200 pt-3 mt-4 flex flex-col sm:flex-row items-center justify-around gap-4">
-                    <div className="flex items-center gap-4">
+                  <div className="border-t border-slate-200 pt-3 mt-4 flex flex-col sm:flex-row items-center justify-around gap-4 print:pt-1 print:mt-1.5 print:flex-row print:gap-2">
+                    <div className="flex items-center gap-4 print:gap-2">
                       {/* SVG Donut Chart */}
-                      <div className="relative w-28 h-28 flex items-center justify-center">
+                      <div className="relative w-28 h-28 flex items-center justify-center print:w-16 print:h-16">
                         <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 transform">
                           {/* Masculino segment (50.59%) */}
                           <circle
@@ -619,84 +614,84 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase">Género</span>
-                          <span className="text-xs font-black text-slate-800">100%</span>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase print:text-[7px]">Género</span>
+                          <span className="text-xs font-black text-slate-800 print:text-[9px]">100%</span>
                         </div>
                       </div>
 
                       {/* Legend and Data details */}
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3.5 h-3.5 rounded-full bg-[#0f3458] inline-block"></span>
+                      <div className="space-y-2 print:space-y-0.5">
+                        <div className="flex items-center gap-2 print:gap-1">
+                          <span className="w-3.5 h-3.5 print:w-2 print:h-2 rounded-full bg-[#0f3458] inline-block"></span>
                           <div>
-                            <span className="text-xs font-bold text-slate-800">MASCULINO: </span>
-                            <span className="text-xs font-extrabold text-[#0f3458]">388 (50.59%)</span>
+                            <span className="text-xs font-bold text-slate-800 print:text-[8.5px]">MASCULINO: </span>
+                            <span className="text-xs font-extrabold text-[#0f3458] print:text-[8.5px]">388 (50.59%)</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <span className="w-3.5 h-3.5 rounded-full bg-[#853625] inline-block"></span>
+                        <div className="flex items-center gap-2 print:gap-1">
+                          <span className="w-3.5 h-3.5 print:w-2 print:h-2 rounded-full bg-[#853625] inline-block"></span>
                           <div>
-                            <span className="text-xs font-bold text-slate-800">FEMENINO: </span>
-                            <span className="text-xs font-extrabold text-[#853625]">379 (49.41%)</span>
+                            <span className="text-xs font-bold text-slate-800 print:text-[8.5px]">FEMENINO: </span>
+                            <span className="text-xs font-extrabold text-[#853625] print:text-[8.5px]">379 (49.41%)</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center max-w-[200px]">
+                    <div className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center max-w-[200px] print:p-1 print:text-[8px] print:max-w-[140px]">
                       <span className="font-bold text-slate-700 block">Equidad de Género</span>
-                      <span>Distribución equilibrada y balanceada de matrícula escolar.</span>
+                      <span>Distribución equilibrada de matrícula.</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Right Column: Distribución por Nivel / Grado Matrix */}
-                <div className="lg:col-span-5 bg-white rounded-xl shadow-xs border border-slate-300 overflow-hidden flex flex-col">
-                  <div className="bg-[#0f3458] text-white px-3 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
+                <div className="lg:col-span-5 print:col-span-5 bg-white rounded-xl shadow-xs border border-slate-300 overflow-hidden flex flex-col print:rounded-lg">
+                  <div className="bg-[#0f3458] text-white px-3 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-between print:px-2 print:py-1 print:text-[9px]">
                     <span>Distribución por Nivel y Cursos</span>
                     <span className="text-amber-300 font-mono">Año 2026-2027</span>
                   </div>
 
-                  <div className="overflow-x-auto flex-1 max-h-[380px] overflow-y-auto">
-                    <table className="w-full text-xs text-left border-collapse">
+                  <div className="overflow-x-auto flex-1 max-h-[380px] overflow-y-auto print:max-h-none print:overflow-visible">
+                    <table className="w-full text-xs text-left border-collapse print:text-[8.5px]">
                       <thead>
-                        <tr className="bg-[#0b2844] text-white text-[11px] font-semibold sticky top-0 z-10">
-                          <th className="py-1.5 px-2.5">Nivel</th>
-                          <th className="py-1.5 px-2 text-center">Paralelos</th>
-                          <th className="py-1.5 px-2 text-center">Femenino</th>
-                          <th className="py-1.5 px-2 text-center">Masculino</th>
-                          <th className="py-1.5 px-2.5 text-center font-bold">Total</th>
+                        <tr className="bg-[#0b2844] text-white text-[11px] font-semibold sticky top-0 z-10 print:text-[8.5px] print:static">
+                          <th className="py-1.5 px-2.5 print:py-0.5 print:px-1">Nivel</th>
+                          <th className="py-1.5 px-2 text-center print:py-0.5 print:px-1">Paralelos</th>
+                          <th className="py-1.5 px-2 text-center print:py-0.5 print:px-1">Femenino</th>
+                          <th className="py-1.5 px-2 text-center print:py-0.5 print:px-1">Masculino</th>
+                          <th className="py-1.5 px-2.5 text-center font-bold print:py-0.5 print:px-1">Total</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 text-[11px]">
+                      <tbody className="divide-y divide-slate-100 text-[11px] print:text-[8px]">
                         {levelDistribution.map((row, i) => (
                           <tr key={i} className={i % 2 === 0 ? 'bg-white hover:bg-blue-50/50' : 'bg-slate-50/70 hover:bg-blue-50/50'}>
-                            <td className="py-1.5 px-2.5 font-medium text-slate-800 whitespace-nowrap">
+                            <td className="py-1.5 px-2.5 font-medium text-slate-800 whitespace-nowrap print:py-0.5 print:px-1">
                               {row.nivel}
                             </td>
-                            <td className="py-1.5 px-2 text-center text-slate-600 font-mono">
+                            <td className="py-1.5 px-2 text-center text-slate-600 font-mono print:py-0.5 print:px-1">
                               {row.paralelos}
                             </td>
-                            <td className="py-1.5 px-2 text-center text-[#853625] font-semibold">
+                            <td className="py-1.5 px-2 text-center text-[#853625] font-semibold print:py-0.5 print:px-1">
                               {row.fem}
                             </td>
-                            <td className="py-1.5 px-2 text-center text-[#0f3458] font-semibold">
+                            <td className="py-1.5 px-2 text-center text-[#0f3458] font-semibold print:py-0.5 print:px-1">
                               {row.masc}
                             </td>
-                            <td className="py-1.5 px-2.5 text-center font-bold text-slate-900 bg-slate-100/60">
+                            <td className="py-1.5 px-2.5 text-center font-bold text-slate-900 bg-slate-100/60 print:py-0.5 print:px-1">
                               {row.total}
                             </td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-[#0f3458] text-white font-bold text-xs sticky bottom-0">
-                          <td className="py-2 px-2.5 uppercase tracking-wider">Total</td>
-                          <td className="py-2 px-2 text-center font-mono text-amber-300">{totalParalelos}</td>
-                          <td className="py-2 px-2 text-center font-mono text-amber-300">{totalFem}</td>
-                          <td className="py-2 px-2 text-center font-mono text-amber-300">{totalMasc}</td>
-                          <td className="py-2 px-2.5 text-center font-mono text-[#ffc107] text-sm">{totalSum}</td>
+                        <tr className="bg-[#0f3458] text-white font-bold text-xs sticky bottom-0 print:text-[8.5px] print:static">
+                          <td className="py-2 px-2.5 uppercase tracking-wider print:py-1 print:px-1">Total</td>
+                          <td className="py-2 px-2 text-center font-mono text-amber-300 print:py-1 print:px-1">{totalParalelos}</td>
+                          <td className="py-2 px-2 text-center font-mono text-amber-300 print:py-1 print:px-1">{totalFem}</td>
+                          <td className="py-2 px-2 text-center font-mono text-amber-300 print:py-1 print:px-1">{totalMasc}</td>
+                          <td className="py-2 px-2.5 text-center font-mono text-[#ffc107] text-sm print:py-1 print:px-1 print:text-[9px]">{totalSum}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -705,36 +700,36 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
               </div>
 
               {/* 4. BOTTOM CHART: PROMEDIO POR CURSO LINE CHART */}
-              <div className="bg-white rounded-xl shadow-xs border border-slate-300 p-4">
-                <div className="flex flex-col sm:flex-row items-center justify-between pb-2 mb-2 border-b border-slate-200">
+              <div className="bg-white rounded-xl shadow-xs border border-slate-300 p-4 print:p-2 print:rounded-lg">
+                <div className="flex flex-col sm:flex-row items-center justify-between pb-2 mb-2 border-b border-slate-200 print:pb-1 print:mb-1">
                   <div className="flex items-center gap-2">
-                    <TrendingUp size={16} className="text-[#0f3458]" />
-                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wide">
+                    <TrendingUp size={16} className="text-[#0f3458] print:w-3.5 print:h-3.5" />
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wide print:text-[9px]">
                       Promedio Por Curso (Rendimiento Académico)
                     </h3>
                   </div>
-                  <div className="flex items-center gap-3 text-xs">
+                  <div className="flex items-center gap-3 text-xs print:gap-2 print:text-[8px]">
                     <span className="flex items-center gap-1 text-slate-500 font-medium">
                       <span className="w-3 h-0.5 bg-slate-400 inline-block border-t border-dashed"></span>
                       Meta Institucional (9.50)
                     </span>
                     <span className="flex items-center gap-1 text-[#0f3458] font-bold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#0f3458] inline-block"></span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#0f3458] inline-block print:w-2 print:h-2"></span>
                       Promedio Real
                     </span>
                   </div>
                 </div>
 
                 {/* SVG Curve Line Chart */}
-                <div className="w-full overflow-x-auto">
-                  <div className="min-w-[700px] h-48 relative pt-4 pb-8">
+                <div className="w-full overflow-x-auto print:overflow-visible">
+                  <div className="min-w-[700px] print:min-w-0 print:w-full h-48 print:h-20 relative pt-4 pb-8 print:pt-1 print:pb-3">
                     {/* Benchmark 9.50 line */}
                     <div className="absolute top-[25%] left-0 right-0 border-t border-dashed border-slate-300 flex items-center justify-end pr-2">
-                      <span className="text-[10px] font-bold text-slate-400 bg-white px-1 -mt-2.5">9,50</span>
+                      <span className="text-[10px] font-bold text-slate-400 bg-white px-1 -mt-2.5 print:text-[7px]">9,50</span>
                     </div>
 
                     {/* SVG Graphic */}
-                    <svg viewBox="0 0 800 130" className="w-full h-28 overflow-visible">
+                    <svg viewBox="0 0 800 130" className="w-full h-28 print:h-12 overflow-visible">
                       <polyline
                         fill="none"
                         stroke="#0f3458"
@@ -789,7 +784,7 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
                     </svg>
 
                     {/* X-axis Course Labels */}
-                    <div className="grid grid-cols-16 gap-1 text-[9px] font-semibold text-slate-600 text-center mt-2">
+                    <div className="grid grid-cols-16 gap-1 text-[9px] font-semibold text-slate-600 text-center mt-2 print:text-[7px] print:mt-0">
                       {levelDistribution.map((row, i) => (
                         <div key={i} className="truncate transform -rotate-30 origin-top-left pt-1" title={row.nivel}>
                           {row.nivel.replace(' Básica', 'º').replace(' Bachillerato', 'º Bach')}
@@ -810,17 +805,11 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
               {/* 1. TOP NAVY BANNER */}
               <div className="bg-[#0f3458] text-white rounded-xl shadow-md border border-[#0b2844] p-4 lg:p-5 flex flex-col lg:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5 min-w-[240px]">
-                  {institutionLogo ? (
-                    <img 
-                      src={institutionLogo} 
-                      alt="Logo Escuela" 
-                      className="w-14 h-14 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40"
-                    />
-                  ) : (
-                    <div className="w-13 h-13 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-900 shadow-md border border-amber-300/50">
-                      <GraduationCap size={28} className="text-white" />
-                    </div>
-                  )}
+                  <img 
+                    src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                    alt="Logo Escuela" 
+                    className="w-14 h-14 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40 shrink-0"
+                  />
                   <div>
                     <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#ffc107] uppercase leading-none font-serif">
                       {institutionName || 'UNIDAD EDUCATIVA'}
@@ -1024,17 +1013,11 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
               {/* 1. TOP NAVY BANNER */}
               <div className="bg-[#0f3458] text-white rounded-xl shadow-md border border-[#0b2844] p-4 lg:p-5 flex flex-col lg:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5 min-w-[240px]">
-                  {institutionLogo ? (
-                    <img 
-                      src={institutionLogo} 
-                      alt="Logo Escuela" 
-                      className="w-14 h-14 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40"
-                    />
-                  ) : (
-                    <div className="w-13 h-13 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-900 shadow-md border border-amber-300/50">
-                      <Users size={28} className="text-white" />
-                    </div>
-                  )}
+                  <img 
+                    src={institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO} 
+                    alt="Logo Escuela" 
+                    className="w-14 h-14 object-contain rounded-lg bg-white p-1 shadow-sm border border-amber-300/40 shrink-0"
+                  />
                   <div>
                     <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#ffc107] uppercase leading-none font-serif">
                       {institutionName || 'UNIDAD EDUCATIVA'}

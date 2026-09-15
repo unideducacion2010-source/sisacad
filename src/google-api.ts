@@ -203,8 +203,8 @@ export async function moveFileToFolder(token: string, fileId: string, folderId: 
 export async function writeAllMasterHeaders(token: string, spreadsheetId: string) {
   const headersData = [
     {
-      range: 'Alumnos!A1:I1',
-      values: [['ID', 'Matrícula', 'Nombres', 'Apellidos', 'Grado / Grupo', 'Carrera / Nivel', 'Correo Electrónico', 'Estatus', 'Fecha de Registro']]
+      range: 'Alumnos!A1:M1',
+      values: [['ID', 'Matrícula', 'Nombres', 'Apellidos', 'CURP', 'Grado / Grupo', 'Carrera / Nivel', 'Correo Electrónico', 'Teléfono / Celular', 'Padre / Tutor', 'Tel. Emergencia', 'Estatus', 'Fecha de Registro']]
     },
     {
       range: 'Maestros!A1:F1',
@@ -301,10 +301,14 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
     s.id || '',
     s.matricula || `MAT-${s.id?.slice(-4) || '001'}`,
     s.nombres || s.nombre || '',
-    s.apellidos || '',
-    s.grado || s.grupo || '1er Grado',
-    s.carrera || s.nivel || 'General',
+    s.apellidos || (s.apellidoPaterno ? `${s.apellidoPaterno} ${s.apellidoMaterno || ''}`.trim() : ''),
+    s.curp || '',
+    (s.grado && s.grupo) ? `${s.grado} - ${s.grupo}` : (s.grado || s.grupo || '1er Grado'),
+    s.nivel || s.carrera || 'General',
     s.email || '',
+    s.celular || s.telefonoCasa || '',
+    s.nombrePadreTutor || s.tutor || '',
+    s.telefonoEmergencia || s.celular || '',
     s.estatus || 'Activo',
     s.fechaRegistro || s.fechaInscripcion || new Date().toISOString().split('T')[0]
   ]);
@@ -456,20 +460,20 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
 
   // First clear old data A2:Z1000 in each sheet
   const clearRanges = [
-    'Alumnos!A2:I500',
-    'Maestros!A2:F500',
-    'Materias!A2:F500',
-    'Ciclos_Escolares!A2:I500',
-    'Calificaciones!A2:G500',
-    'Control_Escolar!A2:F500',
-    'Kardex!A2:F500',
-    'Usuarios_Sistema!A2:H500',
-    'Avisos_y_Tareas!A2:G500',
-    'Asistencias!A2:G500',
-    'Informes_Estadisticas!A2:H500',
-    'Solicitudes_Calificaciones!A2:H500',
-    'Constancias_Emitidas!A2:G500',
-    'Pagos_y_Colegiaturas!A2:H500'
+    'Alumnos!A2:Z1000',
+    'Maestros!A2:Z1000',
+    'Materias!A2:Z1000',
+    'Ciclos_Escolares!A2:Z1000',
+    'Calificaciones!A2:Z1000',
+    'Control_Escolar!A2:Z1000',
+    'Kardex!A2:Z1000',
+    'Usuarios_Sistema!A2:Z1000',
+    'Avisos_y_Tareas!A2:Z1000',
+    'Asistencias!A2:Z1000',
+    'Informes_Estadisticas!A2:Z1000',
+    'Solicitudes_Calificaciones!A2:Z1000',
+    'Constancias_Emitidas!A2:Z1000',
+    'Pagos_y_Colegiaturas!A2:Z1000'
   ];
 
   await fetch(`${SHEETS_API_URL}/${spreadsheetId}/values:batchClear`, {
@@ -611,7 +615,8 @@ export async function setupSysAcadWorkspace(token: string, appData: any, cachedR
     '09_Respaldos_del_Sistema',
     '10_Asistencias_y_Listas',
     '11_Credenciales_y_Formatos',
-    '12_Informes_y_Estadisticas'
+    '12_Informes_y_Estadisticas',
+    '13_Pagos_y_Colegiaturas'
   ];
 
   const subfoldersList: { name: string; id: string; url: string }[] = [];
@@ -916,12 +921,12 @@ export async function setupSpecificCycleInDrive(
 export async function loadFullDataFromSheets(token: string, spreadsheetId: string): Promise<any | null> {
   try {
     const ranges = [
-      'Alumnos!A2:I200',
-      'Maestros!A2:F200',
-      'Materias!A2:F200',
-      'Calificaciones!A2:G200',
-      'Usuarios_Sistema!A2:H200',
-      'Avisos_y_Tareas!A2:G200'
+      'Alumnos!A2:M500',
+      'Maestros!A2:F500',
+      'Materias!A2:F500',
+      'Calificaciones!A2:G500',
+      'Usuarios_Sistema!A2:H500',
+      'Avisos_y_Tareas!A2:G500'
     ];
 
     const url = `${SHEETS_API_URL}/${spreadsheetId}/values:batchGet?ranges=${ranges.map(r => encodeURIComponent(r)).join('&ranges=')}`;
@@ -943,11 +948,18 @@ export async function loadFullDataFromSheets(token: string, spreadsheetId: strin
       .filter((r: any[]) => r && r[2])
       .map((r: any[], idx: number) => ({
         id: r[0] || `a-${Date.now()}-${idx}`,
+        matricula: r[1] || '',
         nombres: r[2] || '',
         apellidos: r[3] || '',
-        grado: r[4] || '1er Grado',
-        email: r[6] || '',
-        fechaInscripcion: r[8] || new Date().toISOString().split('T')[0]
+        curp: r[4] || '',
+        grado: r[5] || '1er Grado',
+        nivel: r[6] || 'General',
+        email: r[7] || '',
+        celular: r[8] || '',
+        nombrePadreTutor: r[9] || '',
+        telefonoEmergencia: r[10] || '',
+        estatus: r[11] || 'Activo',
+        fechaInscripcion: r[12] || new Date().toISOString().split('T')[0]
       }));
 
     const loadedMaterias = materiasRows
