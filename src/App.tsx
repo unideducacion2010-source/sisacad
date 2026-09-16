@@ -305,8 +305,11 @@ export default function App() {
       }
 
       if (Array.isArray(serverAlumnos) && serverAlumnos.length > 0) {
-        setAlumnosList(serverAlumnos);
-        localStorage.setItem('sysacad_alumnos_list', JSON.stringify(serverAlumnos));
+        setAlumnosList(prev => {
+          const merged = mergeAlumnos(prev, serverAlumnos);
+          localStorage.setItem('sysacad_alumnos_list', JSON.stringify(merged));
+          return merged;
+        });
       }
       if (Array.isArray(serverMaterias) && serverMaterias.length > 0) {
         setMateriasList(serverMaterias);
@@ -858,6 +861,24 @@ export default function App() {
     localStorage.setItem('sysacad_alumnos_list', JSON.stringify(initialDefaultAlumnos));
     return initialDefaultAlumnos;
   });
+
+  const mergeAlumnos = (listA: AlumnoItem[], listB: AlumnoItem[]): AlumnoItem[] => {
+    const map = new Map<string, AlumnoItem>();
+    listA.forEach(a => {
+      const key = a.id || a.matricula || `${a.nombres}-${a.apellidos}`.toLowerCase();
+      map.set(key, a);
+    });
+    listB.forEach(a => {
+      const key = a.id || a.matricula || `${a.nombres}-${a.apellidos}`.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, a);
+      } else {
+        const existing = map.get(key)!;
+        map.set(key, { ...a, ...existing });
+      }
+    });
+    return Array.from(map.values());
+  };
 
   const updateAlumnos = (newList: AlumnoItem[]) => {
     setAlumnosList(newList);
@@ -3514,8 +3535,8 @@ export default function App() {
       let workingAvisos = [...avisosList];
 
       if (existingSheetData) {
-        if (workingAlumnos.length === 0 && existingSheetData.alumnos?.length > 0) {
-          workingAlumnos = existingSheetData.alumnos;
+        if (existingSheetData.alumnos?.length > 0) {
+          workingAlumnos = mergeAlumnos(workingAlumnos, existingSheetData.alumnos);
           setAlumnosList(workingAlumnos);
           localStorage.setItem('sysacad_alumnos_list', JSON.stringify(workingAlumnos));
         }
@@ -3588,7 +3609,7 @@ export default function App() {
       let finalAvisos = workingAvisos;
 
       if (res.loadedData?.alumnos && res.loadedData.alumnos.length > 0) {
-        finalAlumnos = res.loadedData.alumnos;
+        finalAlumnos = mergeAlumnos(finalAlumnos, res.loadedData.alumnos);
         setAlumnosList(finalAlumnos);
         localStorage.setItem('sysacad_alumnos_list', JSON.stringify(finalAlumnos));
       }
