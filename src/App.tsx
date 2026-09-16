@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, CheckCircle, XCircle, Send, HelpCircle, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound, UploadCloud, Smartphone, QrCode, Share2, Copy, Check, LogIn, AlertCircle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as XLSX from 'xlsx';
 import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive, searchDriveFiles } from './google-api';
 import { googleSignIn, initAuth, logout, getEffectiveClientId, setCustomClientId, validateGoogleToken, clearInvalidToken } from './auth';
 import { playClickSound, playNavigateSound, playLoginSuccessSound, playLogoutSound, playSuccessSound, playErrorSound, playDeleteSound, isSoundMuted, toggleSoundMute } from './soundEffects';
@@ -1065,6 +1066,89 @@ export default function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const excelAlumnosInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportExcelAlumnos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        if (!jsonRows || jsonRows.length === 0) {
+          alert('El archivo Excel no contiene filas o datos válidos.');
+          return;
+        }
+
+        const newImportedAlumnos: AlumnoItem[] = [];
+
+        jsonRows.forEach((row, idx) => {
+          const normalizedRow: Record<string, any> = {};
+          Object.keys(row).forEach(k => {
+            normalizedRow[k.trim().toLowerCase()] = row[k];
+          });
+
+          const nombres = normalizedRow['nombres'] || normalizedRow['nombre'] || normalizedRow['alumno'] || normalizedRow['nombre completo'] || '';
+          const apellidos = normalizedRow['apellidos'] || normalizedRow['apellido paterno'] || normalizedRow['apellido'] || '';
+          if (!nombres) return;
+
+          const matricula = String(normalizedRow['matrícula'] || normalizedRow['matricula'] || normalizedRow['id'] || `MAT-${Math.floor(1000 + Math.random() * 9000)}`);
+          const curp = String(normalizedRow['curp'] || normalizedRow['c.u.r.p.'] || '').toUpperCase();
+          const grado = String(normalizedRow['grado'] || normalizedRow['semestre'] || '1er Grado');
+          const grupo = String(normalizedRow['grupo'] || 'A');
+          const nivel = String(normalizedRow['nivel'] || normalizedRow['nivel educativo'] || 'Primaria');
+          const email = String(normalizedRow['email'] || normalizedRow['correo'] || normalizedRow['correo institucional'] || `${String(nombres).toLowerCase().replace(/\s+/g, '.')}.${String(apellidos).toLowerCase().split(' ')[0] || 'alu'}@sysacad.edu.mx`);
+          const celular = String(normalizedRow['celular'] || normalizedRow['teléfono'] || normalizedRow['telefono'] || normalizedRow['tel'] || '');
+          const nombrePadreTutor = String(normalizedRow['tutor'] || normalizedRow['padre'] || normalizedRow['madre'] || normalizedRow['nombre del tutor'] || '');
+          const estatus = String(normalizedRow['estatus'] || normalizedRow['estado'] || 'Activo');
+
+          const importedItem: AlumnoItem = {
+            id: `imp-${Date.now()}-${idx}`,
+            matricula,
+            clave: `ALU-${matricula}`,
+            nombres: String(nombres).trim(),
+            apellidos: String(apellidos).trim(),
+            curp,
+            grado: String(grado).trim(),
+            grupo: String(grupo).trim(),
+            nivel: String(nivel).trim(),
+            email: String(email).trim(),
+            celular: String(celular).trim(),
+            nombrePadreTutor: String(nombrePadreTutor).trim(),
+            estatus: String(estatus).trim() || 'Activo',
+            fechaInscripcion: new Date().toISOString().split('T')[0]
+          };
+
+          newImportedAlumnos.push(importedItem);
+        });
+
+        if (newImportedAlumnos.length > 0) {
+          const merged = mergeAlumnos(alumnosList, newImportedAlumnos);
+          updateAlumnos(merged);
+          playSuccessSound();
+          alert(`¡Se han importado ${newImportedAlumnos.length} alumnos correctamente desde el archivo de Excel!`);
+        } else {
+          alert('No se pudieron extraer alumnos. Verifique que el archivo tenga columnas como "Nombres", "Apellidos", "Matrícula", etc.');
+        }
+      } catch (err: any) {
+        console.error('Error parsing Excel file:', err);
+        playErrorSound();
+        alert('Error al procesar el archivo Excel: ' + (err.message || 'Formato no válido'));
+      } finally {
+        if (excelAlumnosInputRef.current) {
+          excelAlumnosInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   // Materias State
@@ -4017,6 +4101,21 @@ export default function App() {
                   <Download size={18} />
                   <span className="hidden sm:inline">Exportar a Excel</span>
                 </button>
+                <button 
+                  onClick={() => excelAlumnosInputRef.current?.click()}
+                  className="bg-sky-700 hover:bg-sky-800 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Importar lista de alumnos desde Excel (.xlsx, .xls, .csv)"
+                >
+                  <UploadCloud size={18} />
+                  <span className="hidden sm:inline">Importar Excel</span>
+                </button>
+                <input 
+                  type="file" 
+                  ref={excelAlumnosInputRef} 
+                  onChange={handleImportExcelAlumnos} 
+                  accept=".xlsx, .xls, .csv" 
+                  className="hidden" 
+                />
                 <button 
                   onClick={handleOpenCreateAlumno}
                   className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
