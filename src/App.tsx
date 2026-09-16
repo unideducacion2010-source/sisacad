@@ -1005,7 +1005,9 @@ export default function App() {
       return false;
     }
     
-    if (data.id) {
+    const isExisting = data.id && alumnosList.some(a => a.id === data.id);
+
+    if (isExisting) {
       updateAlumnos(alumnosList.map(a => a.id === data.id ? {
         ...a,
         ...data,
@@ -1017,7 +1019,7 @@ export default function App() {
         fechaInscripcion: data.fechaInscripcion || a.fechaInscripcion
       } : a));
     } else {
-      const newId = Date.now().toString();
+      const newId = data.id && !alumnosList.some(a => a.id === data.id) ? data.id : Date.now().toString();
       const newStudent: AlumnoItem = {
         ...data,
         id: newId,

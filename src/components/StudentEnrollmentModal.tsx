@@ -1445,7 +1445,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
                     type="submit"
                     className="px-8 py-2.5 bg-[#689f38] hover:bg-[#558b2f] text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto uppercase tracking-wide"
                   >
-                    <span>CONTINUAR</span>
+                    <span>AGREGAR</span>
                   </button>
                 </div>
               </div>
