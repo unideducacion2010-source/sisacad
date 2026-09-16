@@ -4045,6 +4045,10 @@ export default function App() {
               isOpen={isAlumnoModalOpen}
               onClose={() => setIsAlumnoModalOpen(false)}
               onSave={handleSaveStudent}
+              onImportBatch={(imported) => {
+                const merged = mergeAlumnos(alumnosList, imported);
+                updateAlumnos(merged);
+              }}
               initialData={editingAlumnoData}
               institutionName={institutionName || 'VILLA MONTESSORI DE MORELIA'}
               institutionLogo={institutionLogo}
@@ -4233,6 +4237,10 @@ export default function App() {
               isOpen={isAlumnoModalOpen}
               onClose={() => setIsAlumnoModalOpen(false)}
               onSave={handleSaveStudent}
+              onImportBatch={(imported) => {
+                const merged = mergeAlumnos(alumnosList, imported);
+                updateAlumnos(merged);
+              }}
               initialData={editingAlumnoData}
               institutionName={institutionName || 'VILLA MONTESSORI DE MORELIA'}
               institutionLogo={institutionLogo}

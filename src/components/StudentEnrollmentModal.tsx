@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   User, 
   MapPin, 
@@ -17,9 +17,11 @@ import {
   Save, 
   Printer, 
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  UploadCloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as XLSX from 'xlsx';
 import { DEFAULT_VILLA_MONTESSORI_LOGO } from '../assets/logo';
 import { CentroEscolarData } from './CentroEscolarView';
 
@@ -89,6 +91,7 @@ interface StudentEnrollmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: StudentFormData) => boolean | void;
+  onImportBatch?: (data: StudentFormData[]) => void;
   initialData?: StudentFormData | null;
   institutionName?: string;
   institutionLogo?: string;
@@ -100,6 +103,7 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onImportBatch,
   initialData,
   institutionName = 'VILLA MONTESSORI DE MORELIA',
   institutionLogo,
@@ -108,6 +112,121 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
 }) => {
   const effectiveSchoolName = centroEscolar?.nombre || institutionName;
   const effectiveLogo = centroEscolar?.logoUrl || institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO;
+
+  const excelInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        if (!jsonRows || jsonRows.length === 0) {
+          alert('El archivo Excel no contiene filas o datos válidos.');
+          return;
+        }
+
+        const importedAlumnos: StudentFormData[] = [];
+
+        jsonRows.forEach((row, idx) => {
+          const normalizedRow: Record<string, any> = {};
+          Object.keys(row).forEach(k => {
+            normalizedRow[k.trim().toLowerCase()] = row[k];
+          });
+
+          const nombres = normalizedRow['nombres'] || normalizedRow['nombre'] || normalizedRow['alumno'] || normalizedRow['nombre completo'] || '';
+          const apellidos = normalizedRow['apellidos'] || normalizedRow['apellido paterno'] || normalizedRow['apellido'] || '';
+          if (!nombres) return;
+
+          const matricula = String(normalizedRow['matrícula'] || normalizedRow['matricula'] || normalizedRow['id'] || `MAT-${Math.floor(1000 + Math.random() * 9000)}`);
+          const curp = String(normalizedRow['curp'] || normalizedRow['c.u.r.p.'] || '').toUpperCase();
+          const grado = String(normalizedRow['grado'] || normalizedRow['semestre'] || '1er Grado');
+          const grupo = String(normalizedRow['grupo'] || 'A');
+          const nivel = String(normalizedRow['nivel'] || normalizedRow['nivel educativo'] || 'Primaria');
+          const email = String(normalizedRow['email'] || normalizedRow['correo'] || normalizedRow['correo institucional'] || '');
+          const celular = String(normalizedRow['celular'] || normalizedRow['teléfono'] || normalizedRow['telefono'] || '');
+          const nombrePadreTutor = String(normalizedRow['tutor'] || normalizedRow['padre'] || normalizedRow['madre'] || normalizedRow['nombre del tutor'] || '');
+
+          importedAlumnos.push({
+            matricula,
+            nombres: String(nombres).trim(),
+            apellidoPaterno: String(apellidos).trim(),
+            apellidoMaterno: '',
+            genero: 'Otro',
+            fechaNacimiento: '2015-01-01',
+            lugarNacimiento: 'Morelia, Michoacán',
+            nacionalidad: 'Mexicana',
+            curp,
+            clave: `ALU-${matricula}`,
+            calleNumero: '',
+            colonia: '',
+            codigoPostal: '',
+            entreCalles: '',
+            municipio: 'Morelia',
+            estado: 'Michoacán',
+            email,
+            celular,
+            telefonoCasa: '',
+            nombrePadreTutor,
+            nombreMadre: '',
+            parentescoTutor: 'Padre',
+            ocupacionTutor: '',
+            telefonoEmergencia: celular,
+            emailTutor: '',
+            nivel,
+            grado,
+            grupo,
+            turno: 'Matutino',
+            escuelaProcedencia: '',
+            promedioAnterior: '9.0',
+            razonSocial: '',
+            rfc: '',
+            regimenFiscal: '',
+            usoCfdi: '',
+            emailFacturacion: '',
+            cuotaInscripcion: '3500',
+            colegiaturaMensual: '2500',
+            porcentajeBeca: '0',
+            diaLimitePago: '10',
+            docActaNacimiento: true,
+            docCurp: true,
+            docCertificadoMedico: true,
+            docCartaConducta: true,
+            docComprobanteDomicilio: true,
+            docFotos: true,
+            docComprobantePago: true,
+            fechaInscripcion: new Date().toISOString().split('T')[0],
+            estatus: 'Activo'
+          });
+        });
+
+        if (importedAlumnos.length > 0) {
+          if (onImportBatch) {
+            onImportBatch(importedAlumnos);
+          } else if (importedAlumnos.length === 1) {
+            setFormData(importedAlumnos[0]);
+          }
+          alert(`¡Se han importado ${importedAlumnos.length} alumnos correctamente desde el archivo Excel!`);
+          onClose();
+        } else {
+          alert('No se encontraron alumnos válidos en el archivo Excel.');
+        }
+      } catch (err: any) {
+        console.error('Error importing Excel:', err);
+        alert('Error al leer el archivo Excel: ' + (err.message || 'Formato desconocido'));
+      } finally {
+        if (excelInputRef.current) excelInputRef.current.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
   const [formData, setFormData] = useState<StudentFormData>({
     matricula: '',
     nombres: '',
@@ -341,9 +460,27 @@ export const StudentEnrollmentModal: React.FC<StudentEnrollmentModalProps> = ({
             </button>
           </div>
 
-          <span className="text-xs text-slate-500 font-semibold hidden md:inline">
-            {cicloEscolar}
-          </span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => excelInputRef.current?.click()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              title="Importar lista y datos de alumnos desde Excel (.xlsx, .xls, .csv)"
+            >
+              <UploadCloud size={14} />
+              <span>Importar Excel</span>
+            </button>
+            <input 
+              type="file" 
+              ref={excelInputRef} 
+              onChange={handleImportExcel} 
+              accept=".xlsx, .xls, .csv" 
+              className="hidden" 
+            />
+            <span className="text-xs text-slate-500 font-semibold hidden md:inline">
+              {cicloEscolar}
+            </span>
+          </div>
         </div>
 
         {/* Scrollable Form Body */}
