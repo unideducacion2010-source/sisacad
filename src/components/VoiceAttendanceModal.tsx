@@ -56,19 +56,20 @@ export const VoiceAttendanceModal: React.FC<VoiceAttendanceModalProps> = ({
 
   const [fecha, setFecha] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedGrado, setSelectedGrado] = useState<string>('Todos');
+  const [selectedGrupo, setSelectedGrupo] = useState<string>('Todos');
   const [attendanceMap, setAttendanceMap] = useState<Record<string, 'A' | 'R' | 'F'>>({});
   const [isListening, setIsListening] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>('');
-  const [aiFeedback, setAiFeedback] = useState<string>('Presiona "Iniciar Voz con IA" y dicta la asistencia (ej. "Juan Pérez asistencia", "María retardo", "Carlos falta").');
+  const [aiFeedback, setAiFeedback] = useState<string>('Presiona "Iniciar Voz con IA" y dicta el nombre del alumno (ej. "Juan Pérez"). Por defecto se asigna Asistencia (A). Si dices "retardo" o "falta", se actualizará.');
   const [confidence, setConfidence] = useState<number | null>(null);
 
   const recognitionRef = useRef<any>(null);
 
-  // Filter alumnos based on grade if selected
+  // Filter alumnos based on grade and group if selected
   const filteredAlumnos = alumnosList.filter(a => {
-    if (selectedGrado === 'Todos') return true;
-    return (a.grado || '').toLowerCase().includes(selectedGrado.toLowerCase()) || 
-           (a.grupo || '').toLowerCase().includes(selectedGrado.toLowerCase());
+    const matchGrado = selectedGrado === 'Todos' || (a.grado || '').toLowerCase().includes(selectedGrado.toLowerCase()) || (a.nivel || '').toLowerCase().includes(selectedGrado.toLowerCase());
+    const matchGrupo = selectedGrupo === 'Todos' || (a.grupo || '').toLowerCase().includes(selectedGrupo.toLowerCase());
+    return matchGrado && matchGrupo;
   });
 
   // Initialize all visible students with 'A' (Asistencia) by default if not set
@@ -167,7 +168,8 @@ export const VoiceAttendanceModal: React.FC<VoiceAttendanceModalProps> = ({
           newMap[id] = 'R';
           updatedCount++;
           setAiFeedback(`IA: Marcado a ${alumno.nombres} ${alumno.apellidos} como RETARDO (R)`);
-        } else if (lowerText.includes('asistencia') || lowerText.includes('presente') || lowerText.includes('viene') || lowerText.includes(' a ')) {
+        } else {
+          // Default to Asistencia (A) simply by mentioning student name
           newMap[id] = 'A';
           updatedCount++;
           setAiFeedback(`IA: Marcado a ${alumno.nombres} ${alumno.apellidos} como ASISTENCIA (A)`);
@@ -265,6 +267,20 @@ export const VoiceAttendanceModal: React.FC<VoiceAttendanceModalProps> = ({
                 <option value="3er">3er Grado</option>
                 <option value="Primaria">Primaria</option>
                 <option value="Secundaria">Secundaria</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-xs">
+              <span className="text-xs text-slate-500 font-bold">Grupo:</span>
+              <select 
+                value={selectedGrupo}
+                onChange={(e) => setSelectedGrupo(e.target.value)}
+                className="text-xs font-semibold text-slate-700 bg-transparent outline-none cursor-pointer"
+              >
+                <option value="Todos">Todos</option>
+                <option value="A">Grupo A</option>
+                <option value="B">Grupo B</option>
+                <option value="C">Grupo C</option>
               </select>
             </div>
           </div>
