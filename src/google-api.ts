@@ -423,12 +423,12 @@ export async function syncAllDataToSheets(token: string, spreadsheetId: string, 
   ]);
 
   const asistenciasRows = (asistenciasList.length > 0 ? asistenciasList : studentsList).map((s: any, idx: number) => [
-    s.asistenciaId || `AST-${Date.now().toString().slice(-4)}-${idx + 1}`,
-    s.matricula || `MAT-${s.id?.slice(-4) || '001'}`,
-    s.alumno || (s.nombres ? `${s.nombres} ${s.apellidos || ''}` : s.nombre || 'Estudiante'),
-    s.grado || s.grupo || '1er Grado',
-    s.fechaAsistencia || new Date().toISOString().split('T')[0],
-    s.estatusAsistencia || 'Presente (100%)',
+    s.asistenciaId || s.alumnoId || `AST-${Date.now().toString().slice(-4)}-${idx + 1}`,
+    s.matricula || `MAT-${s.alumnoId?.slice(-4) || s.id?.slice(-4) || '001'}`,
+    s.alumno || s.alumnoNombre || (s.nombres ? `${s.nombres} ${s.apellidos || ''}` : s.nombre || 'Estudiante'),
+    s.gradoGrupo || s.grado || s.grupo || '1er Grado',
+    s.fechaAsistencia || s.fecha || new Date().toISOString().split('T')[0],
+    s.estatusAsistencia || (s.status === 'A' ? 'Asistencia (A)' : s.status === 'R' ? 'Retardo (R)' : s.status === 'F' ? 'Falta (F)' : 'Presente (100%)'),
     s.observaciones || 'Asistencia regular registrada en sistema'
   ]);
 

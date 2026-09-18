@@ -87,6 +87,7 @@ interface InformesGeneralModalProps {
   playClickSound?: () => void;
   playSuccessSound?: () => void;
   centroEscolar?: CentroEscolarData;
+  attendanceRecordsList?: any[];
 }
 
 export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
@@ -103,11 +104,19 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
   workspaceResult,
   playClickSound,
   playSuccessSound,
-  centroEscolar
+  centroEscolar,
+  attendanceRecordsList
 }) => {
   const effectiveSchoolName = centroEscolar?.nombre || institutionName || 'UNIDAD EDUCATIVA';
   const effectiveLogo = centroEscolar?.logoUrl || institutionLogo || DEFAULT_VILLA_MONTESSORI_LOGO;
   const [activeTab, setActiveTab] = useState<'ciclo' | 'docentes' | 'alumnos'>('ciclo');
+
+  const computedAsistenciaGeneral = useMemo(() => {
+    if (!attendanceRecordsList || attendanceRecordsList.length === 0) return '96.8%';
+    const total = attendanceRecordsList.length;
+    const presentOrLate = attendanceRecordsList.filter((r: any) => r.status === 'A' || r.status === 'R').length;
+    return `${Math.round((presentOrLate / total) * 100)}%`;
+  }, [attendanceRecordsList]);
 
   // Resolved Google Drive Link depending on the currently open view
   const activeDriveLink = useMemo(() => {
@@ -210,7 +219,7 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
       csvContent += `Matrícula Total,${totalStudents}\n`;
       csvContent += `Promedio General,9.2\n`;
       csvContent += `Tasa de Aprobación,98.1%\n`;
-      csvContent += `Asistencia Global,96.8%\n\n`;
+      csvContent += `Asistencia Global,${computedAsistenciaGeneral}\n\n`;
 
       csvContent += 'Matrícula,Nombre,Grado,Nivel,Promedio,Estatus\n';
       alumnosList.forEach(a => {
@@ -1067,7 +1076,7 @@ export const InformesGeneralModal: React.FC<InformesGeneralModalProps> = ({
                       Asistencia General
                     </span>
                     <span className="text-2xl font-bold text-white tracking-tight">
-                      96.8%
+                      {computedAsistenciaGeneral}
                     </span>
                   </div>
 

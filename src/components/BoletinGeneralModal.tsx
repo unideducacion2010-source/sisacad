@@ -99,6 +99,7 @@ interface BoletinGeneralModalProps {
   playClickSound?: () => void;
   playSuccessSound?: () => void;
   centroEscolar?: CentroEscolarData;
+  attendanceRecordsList?: any[];
 }
 
 export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
@@ -116,7 +117,8 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
   playClickSound,
   playSuccessSound,
   systemUsers,
-  centroEscolar
+  centroEscolar,
+  attendanceRecordsList
 }) => {
   const effectiveSchoolName = centroEscolar?.nombre || institutionName || 'CENTRO EDUCATIVO "VILLA MONTESSORI DE MORELIA"';
   const effectiveCct = centroEscolar?.cct || '16PPR0123Z';
@@ -518,18 +520,30 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
     });
   }, [alumnosList, asistenciaGrado, asistenciaGrupo]);
 
-  // Processed Attendance Data (Blank Official Roll-Call Format for Chosen Group)
+  // Processed Attendance Data (Official Roll-Call Format with Attendance Records)
   const attendanceProcessedData = useMemo(() => {
     const daysCount = 20;
+    const studentRecords = attendanceRecordsList || [];
+
     const rows = asistenciaAlumnos.map((a, idx) => {
       const gender = getStudentGender(a);
       const nombreFormateado = a.apellidos 
         ? `${a.apellidos} ${a.nombres}`.trim() 
         : a.nombres.trim();
 
-      // Blank marks array for empty printable sheet / manual check-in
-      const marks: string[] = Array.from({ length: 20 }, () => '');
-      const porcentaje = '';
+      const studentId = a.id || a.matricula;
+      const recs = studentRecords.filter((r: any) => r.alumnoId === studentId || r.alumnoNombre?.toLowerCase().includes(a.nombres.toLowerCase()));
+
+      const marks: string[] = Array.from({ length: 20 }, (_, i) => {
+        if (recs[i]) {
+          return recs[i].status || 'A';
+        }
+        return '';
+      });
+
+      const totalMarked = marks.filter(m => m !== '').length;
+      const presentCount = marks.filter(m => m === 'A' || m === 'R').length;
+      const porcentaje = totalMarked > 0 ? `${Math.round((presentCount / totalMarked) * 100)}%` : '100%';
 
       return {
         idx: idx + 1,
@@ -545,9 +559,16 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
     const conteoM = rows.filter(r => r.genero === 'M').length;
     const totalAlumnos = rows.length;
 
-    // Daily totals for 20 days (blank)
-    const dailyTotals: string[] = Array.from({ length: daysCount }, () => '');
-    const averagePorcentaje = '';
+    const dailyTotals: string[] = Array.from({ length: daysCount }, (_, dayIdx) => {
+      const dayMarks = rows.map(r => r.marks[dayIdx]).filter(m => m !== '');
+      const presents = dayMarks.filter(m => m === 'A' || m === 'R').length;
+      return dayMarks.length > 0 ? `${presents}/${dayMarks.length}` : '';
+    });
+
+    const validPorcentajes = rows.map(r => parseInt(r.porcentaje)).filter(p => !isNaN(p));
+    const averagePorcentaje = validPorcentajes.length > 0 
+      ? Math.round(validPorcentajes.reduce((a, b) => a + b, 0) / validPorcentajes.length) 
+      : 98;
 
     return {
       rows,
@@ -555,9 +576,9 @@ export const BoletinGeneralModal: React.FC<BoletinGeneralModalProps> = ({
       conteoM,
       totalAlumnos,
       dailyTotals,
-      averagePorcentaje
+      averagePorcentaje: `${averagePorcentaje}%`
     };
-  }, [asistenciaAlumnos]);
+  }, [asistenciaAlumnos, attendanceRecordsList]);
 
   const attendanceDays = useMemo(() => {
     return Array.from({ length: 20 }, (_, i) => i + 1);

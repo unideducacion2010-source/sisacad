@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, CheckCircle, XCircle, Send, HelpCircle, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound, UploadCloud, Smartphone, QrCode, Share2, Copy, Check, LogIn, AlertCircle, Clock } from 'lucide-react';
+import { Database, Folder, ShieldAlert, GraduationCap, CheckCircle2, CheckCircle, XCircle, Send, HelpCircle, ExternalLink, Loader2, Menu, PanelLeftClose, Users, BookOpen, FileSpreadsheet, FileText, Settings, LogOut, UserCircle, ShieldCheck, UserCog, Shield, Plus, Trash2, Edit3, Search, UserCheck, UserX, Mail, ClipboardList, GraduationCap as TeacherIcon, ChevronDown, ChevronRight, Lock, Unlock, RefreshCw, AlertTriangle, Volume2, VolumeX, Sparkles, School, Printer, Download, X, Bell, Calendar, Award, CheckSquare, FileCheck, Eye, EyeOff, KeyRound, UploadCloud, Smartphone, QrCode, Share2, Copy, Check, LogIn, AlertCircle, Clock, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { setupSysAcadWorkspace, syncAllDataToSheets, createDriveFolder, createSpreadsheet, moveFileToFolder, writeAllMasterHeaders, WorkspaceSetupResult, syncUsersToSheet, fetchUsersFromSheets, loadFullDataFromSheets, setupSpecificCycleInDrive, searchDriveFiles } from './google-api';
@@ -12,6 +12,7 @@ import { CalificacionesModal } from './components/CalificacionesModal';
 import { DirectTablePrintModal, TablePrintType } from './components/DirectTablePrintModal';
 import { PasswordStrengthMeter, evaluatePasswordStrength } from './components/PasswordStrengthMeter';
 import { CentroEscolarView, CentroEscolarData, DEFAULT_CENTRO_ESCOLAR } from './components/CentroEscolarView';
+import { VoiceAttendanceModal, AttendanceRecord } from './components/VoiceAttendanceModal';
 import { User } from 'firebase/auth';
 import { encodeSyncPayload, decodeSyncPayload, generateMobileSyncUrl, extractSyncPayloadFromUrl } from './syncBridge';
 import { DEFAULT_VILLA_MONTESSORI_LOGO } from './assets/logo';
@@ -895,6 +896,22 @@ export default function App() {
   const [alumnoSearchQuery, setAlumnoSearchQuery] = useState('');
   const [isAlumnoModalOpen, setIsAlumnoModalOpen] = useState(false);
   const [editingAlumnoData, setEditingAlumnoData] = useState<StudentFormData | null>(null);
+  const [isVoiceAttendanceOpen, setIsVoiceAttendanceOpen] = useState(false);
+  const [attendanceRecordsList, setAttendanceRecordsList] = useState<AttendanceRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('sysacad_attendance_records');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleSaveVoiceAttendance = (records: AttendanceRecord[]) => {
+    const updated = [...records, ...attendanceRecordsList.filter(r => r.fecha !== records[0]?.fecha)];
+    setAttendanceRecordsList(updated);
+    localStorage.setItem('sysacad_attendance_records', JSON.stringify(updated));
+    syncSystemStoreToServer({ attendanceRecords: updated });
+  };
 
   const handleOpenCreateAlumno = () => {
     setEditingAlumnoData(null);
@@ -3929,13 +3946,14 @@ export default function App() {
           })),
           systemUsers: systemUsers,
           avisosList: avisosList,
-          solicitudesCambioList: solicitudesCambioList
+          solicitudesCambioList: solicitudesCambioList,
+          asistenciasList: attendanceRecordsList
         };
         syncAllDataToSheets(token, workspaceResult.spreadsheetId, appData).catch(e => console.warn('Auto sync warning:', e));
       }, 1500);
       return () => clearTimeout(timeout);
     }
-  }, [alumnosList, materiasList, calificacionesList, avisosList, systemUsers, solicitudesCambioList, ciclosList, token, workspaceResult?.spreadsheetId]);
+  }, [alumnosList, materiasList, calificacionesList, avisosList, systemUsers, solicitudesCambioList, ciclosList, attendanceRecordsList, token, workspaceResult?.spreadsheetId]);
 
   const handleAdminEmailChange = (newEmail: string) => {
     const trimmed = newEmail.trim();
@@ -4122,6 +4140,17 @@ export default function App() {
                   accept=".xlsx, .xls, .csv" 
                   className="hidden" 
                 />
+                <button 
+                  onClick={() => {
+                    if (playClickSound) playClickSound();
+                    setIsVoiceAttendanceOpen(true);
+                  }}
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
+                  title="Pasar lista dictando por voz con IA (Asistencia, Retardo, Falta)"
+                >
+                  <Mic size={18} className="animate-pulse text-emerald-300" />
+                  <span className="hidden sm:inline">Asistencia por Voz (IA)</span>
+                </button>
                 <button 
                   onClick={handleOpenCreateAlumno}
                   className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer"
@@ -8438,6 +8467,7 @@ export default function App() {
         playClickSound={playClickSound}
         playSuccessSound={playSuccessSound}
         centroEscolar={centroEscolar}
+        attendanceRecordsList={attendanceRecordsList}
       />
 
       {/* Modal Emergente: Boletín General con las 3 opciones (Lista de alumnos, Kardex de calificaciones, Lista de asistencia) */}
@@ -8457,6 +8487,7 @@ export default function App() {
         playClickSound={playClickSound}
         playSuccessSound={playSuccessSound}
         centroEscolar={centroEscolar}
+        attendanceRecordsList={attendanceRecordsList}
       />
 
       {/* Modal Emergente: Impresión Directa de Tablas (Alumnos, Maestros, Materias) */}
@@ -8477,6 +8508,16 @@ export default function App() {
         playClickSound={playClickSound}
         playSuccessSound={playSuccessSound}
         centroEscolar={centroEscolar}
+      />
+
+      {/* Modal Emergente: Control de Asistencia por Voz con IA */}
+      <VoiceAttendanceModal
+        isOpen={isVoiceAttendanceOpen}
+        onClose={() => setIsVoiceAttendanceOpen(false)}
+        alumnosList={alumnosList}
+        onSaveAttendance={handleSaveVoiceAttendance}
+        playClickSound={playClickSound}
+        playSuccessSound={playSuccessSound}
       />
 
       {/* Modal de Advertencia por Inactividad (10 minutos) */}
